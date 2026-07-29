@@ -218,26 +218,17 @@
                 return new Promise(function(resolve) { setTimeout(resolve, 1500); });
             })
             .then(function() {
+                reloadSubtitleList();
                 return activateSubtitle(itemId, sub);
             })
             .then(function() {
-                if (container) {
-                    container.innerHTML = [
-                        '<div style="text-align:center;padding:24px">',
-                        '<div style="font-size:2rem;margin-bottom:8px">✅</div>',
-                        '<p style="color:#4c4;font-size:.95rem;font-weight:600">Legenda baixada e ativada!</p>',
-                        '<p style="color:#888;font-size:.8rem;margin-top:6px">',
-                        'Se não aparecer, selecione no menu CC.',
-                        '</p>',
-                        '</div>'
-                    ].join('');
-                }
-                setTimeout(removePanel, 3000);
+                removePanel();
+                showToast('✅ Legenda baixada! Selecione no menu CC.');
             })
             .catch(function(err) {
-                if (container) {
-                    container.innerHTML = '<p style="color:#f66;font-size:.85rem;text-align:center;padding:20px">Erro ao baixar: ' + escHtml(err.message) + '</p>';
-                }
+                removePanel();
+                showToast('❌ Erro: ' + err.message, true);
+                console.error('[Legendaz] Erro no download:', err);
             });
     }
 
@@ -245,6 +236,50 @@
         return String(str || '')
             .replace(/&/g,'&amp;').replace(/</g,'&lt;')
             .replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+    }
+
+    // ── Toast de notificação ──────────────────────────────────────────────────
+    function showToast(msg, isError) {
+        var id = 'lgz-toast';
+        var old = document.getElementById(id);
+        if (old) old.remove();
+
+        var toast = document.createElement('div');
+        toast.id = id;
+        toast.style.cssText = [
+            'position:fixed', 'bottom:100px', 'left:50%',
+            'transform:translateX(-50%)',
+            'background:' + (isError ? '#8b0000' : '#1a3a1a'),
+            'border:1px solid ' + (isError ? '#f66' : '#4c4'),
+            'color:' + (isError ? '#f99' : '#8f8'),
+            'padding:12px 20px', 'border-radius:8px',
+            'font-size:.9rem', 'font-weight:600',
+            'z-index:2147483647',
+            'box-shadow:0 4px 16px rgba(0,0,0,.5)',
+            'pointer-events:none',
+            'transition:opacity .4s'
+        ].join(';');
+        toast.textContent = msg;
+        document.body.appendChild(toast);
+
+        setTimeout(function() {
+            toast.style.opacity = '0';
+            setTimeout(function() { toast.remove(); }, 400);
+        }, 3500);
+    }
+
+    // ── Força o player a recarregar a lista de legendas ───────────────────────
+    function reloadSubtitleList() {
+        var video = document.querySelector('video');
+        if (!video || video.paused) return;
+        // Micro-seek: avança 0.01s e volta — faz o player reler as streams
+        var t = video.currentTime;
+        video.currentTime = t + 0.01;
+        setTimeout(function() {
+            if (Math.abs(video.currentTime - (t + 0.01)) < 0.1) {
+                video.currentTime = t;
+            }
+        }, 200);
     }
 
     // ── Injeção do botão no OSD do player ───────────────────────────────────
