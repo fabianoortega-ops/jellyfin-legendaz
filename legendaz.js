@@ -193,99 +193,47 @@
             .replace(/>/g,'&gt;').replace(/"/g,'&quot;');
     }
 
-    // ── Injeção do botão no menu de legendas ──────────────────────────────────
-    // Estrutura confirmada via DevTools:
-    //   div.actionSheetContent
-    //     h1.actionSheetTitle  → "Legendas" (identifica o menu certo)
-    //     div.actionSheetScroller.scrollY  → itens de legenda
-    //
-    // Palavras-chave do título em diferentes idiomas do Jellyfin
-    var SUBTITLE_TITLES = ['legendas','subtitles','sous-titres','untertitel',
-                           'subtítulos','sottotitoli','ondertitels','субтитры',
-                           '字幕','字幕','자막','napisy','sottotitoli'];
-
-    function findSubtitleMenu() {
-        var sheets = document.querySelectorAll('.actionSheetContent');
-        for (var i = 0; i < sheets.length; i++) {
-            var title = sheets[i].querySelector('.actionSheetTitle');
-            if (title && SUBTITLE_TITLES.indexOf(title.textContent.trim().toLowerCase()) !== -1) {
-                return sheets[i];
-            }
-        }
-        return null;
-    }
+    // ── Injeção do botão no OSD do player ───────────────────────────────────
+    // Mesmo padrão do AutoPlay Toggle — ícone fixo na barra de controles.
+    // Posicionado logo após o botão de legendas (.btnSubtitles).
 
     function injectButton() {
         if (document.getElementById(BTN_ID)) return;
 
-        var menu = findSubtitleMenu();
-        if (!menu) return;
+        // Inserir após .btnSubtitles, antes de .btnAudio
+        var ref = document.querySelector('.btnAudio') ||
+                  document.querySelector('.btnVideoOsdSettings') ||
+                  document.querySelector('.btnFullscreen');
+        if (!ref) return;
 
         var btn = document.createElement('button');
-        btn.id = BTN_ID;
-        btn.type = 'button';
-        btn.style.cssText = [
-            'width:100%', 'padding:14px 20px', 'cursor:pointer',
-            'color:#00a4dc', 'font-size:.95rem', 'font-weight:600',
-            'background:none', 'border:none', 'border-top:1px solid #333',
-            'margin-top:4px', 'display:flex', 'align-items:center',
-            'gap:10px', 'font-family:inherit'
-        ].join(';');
-        btn.innerHTML = '<span style="font-size:1.1em">🔍</span><span>Buscar Legendas</span>';
-
-        btn.addEventListener('mouseover', function() { btn.style.background = 'rgba(0,164,220,.1)'; });
-        btn.addEventListener('mouseout',  function() { btn.style.background = 'none'; });
+        btn.id        = BTN_ID;
+        btn.type      = 'button';
+        btn.className = 'paper-icon-button-light';
+        btn.title     = 'Legendaz — Buscar Legendas';
+        btn.style.cssText = 'vertical-align:middle;margin:0 2px;padding:0;background:none;border:none;cursor:pointer;color:inherit;';
+        btn.innerHTML = '<span class="material-icons" style="font-size:22px">subtitles</span>';
 
         btn.addEventListener('click', function(e) {
             e.stopPropagation();
-            e.preventDefault();
-
-            // Fechar o menu de legendas ANTES de abrir o painel
-            var backdrop = document.querySelector('.dialogBackdrop');
-            if (backdrop) backdrop.click();
-
-            // Aguarda o menu fechar e então abre o painel
-            setTimeout(function() {
-                Promise.all([getCurrentItem(), getUserSubtitleLang()])
-                    .then(function(results) {
-                        _itemId = results[0].Id;
-                        _lang   = results[1];
-                        showPanel(_itemId, _lang);
-                    })
-                    .catch(function(err) {
-                        console.error('[Legendaz] Erro ao obter item/idioma:', err);
-                        showPanel('', (navigator.language || 'pt').split('-')[0]);
-                    });
-            }, 150);
+            if (document.getElementById(PANEL_ID)) { removePanel(); return; }
+            Promise.all([getCurrentItem(), getUserSubtitleLang()])
+                .then(function(results) {
+                    _itemId = results[0].Id;
+                    _lang   = results[1];
+                    showPanel(_itemId, _lang);
+                })
+                .catch(function(err) {
+                    console.error('[Legendaz] Erro ao obter item/idioma:', err);
+                    showPanel('', (navigator.language || 'pt').split('-')[0]);
+                });
         });
 
-        // Inserir botão FORA do scroller (após), e limitar altura do scroller
-        // para o botão sempre ficar visível sem precisar rolar
-        var scroller = menu.querySelector('.actionSheetScroller');
-        if (scroller) {
-            // Calcular altura máxima disponível para o scroller
-            var titleEl  = menu.querySelector('.actionSheetTitle');
-            var titleH   = titleEl ? titleEl.offsetHeight : 40;
-            var btnH     = 52;
-            var padding  = 24;
-            var maxH     = window.innerHeight - titleH - btnH - padding;
-            scroller.style.maxHeight  = Math.max(120, maxH) + 'px';
-            scroller.style.overflowY  = 'auto';
-            scroller.after(btn);
-        } else {
-            menu.appendChild(btn);
-        }
-
-        console.log('[Legendaz] Botão injetado no menu de legendas.');
+        ref.parentNode.insertBefore(btn, ref);
+        console.log('[Legendaz] Botão injetado no OSD.');
     }
 
-    // ── Observers ─────────────────────────────────────────────────────────────
-    var _t = null;
-    document.addEventListener('mousemove', function() {
-        clearTimeout(_t);
-        _t = setTimeout(injectButton, 60);
-    }, { passive: true });
-
+    // ── Observers (mesmo padrão do AutoPlay Toggle) ───────────────────────────
     document.addEventListener('play', function(e) {
         if (!e.target || e.target.tagName !== 'VIDEO') return;
         var tries = 0;
@@ -294,6 +242,12 @@
             if (document.getElementById(BTN_ID) || ++tries > 30) clearInterval(retry);
         }, 100);
     }, true);
+
+    var _t = null;
+    document.addEventListener('mousemove', function() {
+        clearTimeout(_t);
+        _t = setTimeout(injectButton, 60);
+    }, { passive: true });
 
     setInterval(injectButton, 4000);
 
