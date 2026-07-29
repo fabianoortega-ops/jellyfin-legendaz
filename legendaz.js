@@ -83,7 +83,7 @@
             'width:340px', 'max-height:480px',
             'background:#1a1a1a', 'border:1px solid #333', 'border-radius:10px',
             'box-shadow:0 8px 32px rgba(0,0,0,.6)',
-            'z-index:99999', 'overflow:hidden',
+            'z-index:2147483647', 'overflow:hidden',
             'display:flex', 'flex-direction:column',
             'font-family:-apple-system,BlinkMacSystemFont,Segoe UI,sans-serif'
         ].join(';');
@@ -238,21 +238,30 @@
 
         btn.addEventListener('click', function(e) {
             e.stopPropagation();
-            Promise.all([getCurrentItem(), getUserSubtitleLang()])
-                .then(function(results) {
-                    _itemId = results[0].Id;
-                    _lang   = results[1];
-                    showPanel(_itemId, _lang);
-                })
-                .catch(function(err) {
-                    console.error('[Legendaz] Erro ao obter item/idioma:', err);
-                    showPanel('', (navigator.language || 'pt').split('-')[0]);
-                });
+            e.preventDefault();
+
+            // Fechar o menu de legendas ANTES de abrir o painel
+            var backdrop = document.querySelector('.dialogBackdrop');
+            if (backdrop) backdrop.click();
+
+            // Aguarda o menu fechar e então abre o painel
+            setTimeout(function() {
+                Promise.all([getCurrentItem(), getUserSubtitleLang()])
+                    .then(function(results) {
+                        _itemId = results[0].Id;
+                        _lang   = results[1];
+                        showPanel(_itemId, _lang);
+                    })
+                    .catch(function(err) {
+                        console.error('[Legendaz] Erro ao obter item/idioma:', err);
+                        showPanel('', (navigator.language || 'pt').split('-')[0]);
+                    });
+            }, 150);
         });
 
-        // Inserir após o scroller, dentro do actionSheetContent
+        // Inserir DENTRO do scroller para aparecer na lista rolável
         var scroller = menu.querySelector('.actionSheetScroller');
-        if (scroller) scroller.after(btn);
+        if (scroller) scroller.appendChild(btn);
         else menu.appendChild(btn);
 
         console.log('[Legendaz] Botão injetado no menu de legendas.');
