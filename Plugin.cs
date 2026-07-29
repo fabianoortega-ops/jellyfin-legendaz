@@ -95,7 +95,7 @@ namespace JellyfinLegendaz
 // Legendaz — loader
 (function () {{
     var s = document.createElement('script');
-    s.src = 'https://fabianoortega-ops.github.io/jellyfin-legendaz/legendaz.js?v={Version}';
+    s.src = 'https://fabianoortega-ops.github.io/jellyfin-legendaz/legendaz-player.js?v={Version}';
     s.onerror = function() {{ console.warn('[Legendaz] Falha ao carregar script remoto.'); }};
     document.head.appendChild(s);
 }}());
