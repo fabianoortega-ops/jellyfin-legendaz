@@ -171,14 +171,26 @@
             container.innerHTML = '<p style="color:#888;font-size:.85rem;text-align:center;padding:20px">⬇️ Baixando legenda…</p>';
         }
 
-        // POST /Items/{id}/RemoteSearch/Subtitles/{providerName}/{subtitleId}
-        api('POST', 'Items/' + itemId + '/RemoteSearch/Subtitles/' +
-            encodeURIComponent(sub.ProviderName) + '/' + encodeURIComponent(sub.Id))
+        // POST /Items/{id}/RemoteSearch/Subtitles/{subtitleId}
+        // O sub.Id já carrega o provider codificado internamente
+        api('POST', 'Items/' + itemId + '/RemoteSearch/Subtitles/' + encodeURIComponent(sub.Id))
+            .then(function() {
+                // Avisar o Jellyfin que o item tem conteúdo novo
+                return api('POST', 'Items/' + itemId + '/Refresh?MetadataRefreshMode=None&ImageRefreshMode=None&ReplaceAllMetadata=false&ReplaceAllImages=false');
+            })
             .then(function() {
                 if (container) {
-                    container.innerHTML = '<p style="color:#4c4;font-size:.9rem;text-align:center;padding:20px">✓ Legenda baixada com sucesso!</p>';
+                    container.innerHTML = [
+                        '<div style="text-align:center;padding:24px">',
+                        '<div style="font-size:2rem;margin-bottom:8px">✅</div>',
+                        '<p style="color:#4c4;font-size:.95rem;font-weight:600">Legenda baixada!</p>',
+                        '<p style="color:#888;font-size:.8rem;margin-top:6px">',
+                        'Abra o menu CC para selecionar a legenda.',
+                        '</p>',
+                        '</div>'
+                    ].join('');
                 }
-                setTimeout(removePanel, 2000);
+                setTimeout(removePanel, 3000);
             })
             .catch(function(err) {
                 if (container) {
