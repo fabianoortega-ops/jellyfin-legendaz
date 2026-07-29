@@ -259,10 +259,22 @@
             }, 150);
         });
 
-        // Inserir DENTRO do scroller para aparecer na lista rolável
+        // Inserir botão FORA do scroller (após), e limitar altura do scroller
+        // para o botão sempre ficar visível sem precisar rolar
         var scroller = menu.querySelector('.actionSheetScroller');
-        if (scroller) scroller.appendChild(btn);
-        else menu.appendChild(btn);
+        if (scroller) {
+            // Calcular altura máxima disponível para o scroller
+            var titleEl  = menu.querySelector('.actionSheetTitle');
+            var titleH   = titleEl ? titleEl.offsetHeight : 40;
+            var btnH     = 52;
+            var padding  = 24;
+            var maxH     = window.innerHeight - titleH - btnH - padding;
+            scroller.style.maxHeight  = Math.max(120, maxH) + 'px';
+            scroller.style.overflowY  = 'auto';
+            scroller.after(btn);
+        } else {
+            menu.appendChild(btn);
+        }
 
         console.log('[Legendaz] Botão injetado no menu de legendas.');
     }
