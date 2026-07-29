@@ -167,44 +167,52 @@
             });
     }
 
-    function activateSubtitle(itemId) {
-        return api('GET', 'Items/' + itemId + '?fields=MediaStreams')
+    function activateSubtitle(itemId, downloadedSub) {
+        // Espera mais para o refresh propagar antes de buscar as streams
+        return new Promise(function(resolve) { setTimeout(resolve, 3000); })
+            .then(function() {
+                return api('GET', 'Items/' + itemId + '?fields=MediaStreams');
+            })
             .then(function(item) {
                 var streams = (item.MediaStreams || []).filter(function(s) {
                     return s.Type === 'Subtitle';
                 });
-                if (!streams.length) return null;
+                if (!streams.length) return;
 
-                // Última stream = recém baixada
-                var newSub = streams[streams.length - 1];
+                // Tenta encontrar a legenda baixada pelo idioma/formato
+                var targetLang = (downloadedSub.Language || '').toLowerCase();
+                var targetFmt  = (downloadedSub.Format  || '').toLowerCase();
+                var newSub = streams.find(function(s) {
+                    var sLang = (s.Language || '').toLowerCase();
+                    var sFmt  = (s.Codec    || '').toLowerCase();
+                    return (targetLang && sLang === targetLang) ||
+                           (targetFmt  && sFmt  === targetFmt);
+                }) || streams[streams.length - 1];
+
                 var idx = newSub.Index;
-                var name = newSub.DisplayTitle || newSub.Language || 'legenda';
-                console.log('[Legendaz] Ativando index=' + idx + ' (' + name + ')');
+                console.log('[Legendaz] Ativando index=' + idx +
+                    ' lang=' + newSub.Language + ' codec=' + newSub.Codec);
 
                 var pm = window.playbackManager;
-                if (!pm) return name;
+                if (!pm) return;
 
-                // currentTime() retorna ms; seek() espera ticks (1ms = 10.000 ticks)
+                // Posição atual em ms → ticks (1ms = 10.000 ticks)
                 var ms = 0;
-                try { ms = pm.currentTime ? pm.currentTime() : 0; } catch(e) {}
+                try { ms = typeof pm.currentTime === 'function' ? pm.currentTime() : 0; } catch(e) {}
                 var ticks = Math.floor(ms * 10000);
 
-                // Seek para posição atual força o player a recarregar a media source
-                try { pm.seek(ticks); } catch(e) {}
+                // Tenta ativar diretamente
+                try { pm.setSubtitleStreamIndex(idx); } catch(e) {}
 
-                // Após o reload, define a nova legenda
+                // Seek forçado + retry após 1.5s
                 setTimeout(function() {
-                    try {
-                        if (typeof pm.setSubtitleStreamIndex === 'function') {
-                            pm.setSubtitleStreamIndex(idx);
-                            console.log('[Legendaz] Legenda ' + idx + ' ativada.');
-                        }
-                    } catch(e) { console.warn('[Legendaz]', e); }
-                }, 1000);
-
-                return name;
+                    try { pm.seek(ticks); } catch(e) {}
+                    setTimeout(function() {
+                        try { pm.setSubtitleStreamIndex(idx); } catch(e) {}
+                    }, 1000);
+                }, 300);
             })
-            .catch(function() { return null; });
+            .catch(function(e) { console.warn('[Legendaz] activateSubtitle:', e); });
     }
 
     function downloadSub(itemId, sub) {
@@ -223,11 +231,11 @@
                 return new Promise(function(resolve) { setTimeout(resolve, 1500); });
             })
             .then(function() {
-                return activateSubtitle(itemId);
+                return activateSubtitle(itemId, sub);
             })
-            .then(function(subName) {
+            .then(function() {
                 removePanel();
-                showToast('✅ ' + (subName || sub.Name || 'Legenda') + ' baixada!');
+                showToast('✅ ' + escHtml(sub.Name || 'Legenda') + ' baixada!');
             })
             .catch(function(err) {
                 removePanel();
