@@ -168,8 +168,16 @@
     }
 
     function activateSubtitle(itemId, downloadedSub) {
-        // Espera mais para o refresh propagar antes de buscar as streams
-        return new Promise(function(resolve) { setTimeout(resolve, 3000); })
+        var pm = window.playbackManager;
+
+        // Passo 1: seek para forçar reload do PlaybackInfo (player re-busca streams do servidor)
+        var ms = 0;
+        try { ms = pm && typeof pm.currentTime === 'function' ? pm.currentTime() : 0; } catch(e) {}
+        var ticks = Math.floor(ms * 10000); // ms → ticks (1ms = 10.000 ticks)
+        try { if (pm) pm.seek(ticks); } catch(e) {}
+
+        // Passo 2: aguarda 2.5s para seek + library refresh propagarem
+        return new Promise(function(resolve) { setTimeout(resolve, 2500); })
             .then(function() {
                 return api('GET', 'Items/' + itemId + '?fields=MediaStreams');
             })
@@ -179,38 +187,52 @@
                 });
                 if (!streams.length) return;
 
-                // Tenta encontrar a legenda baixada pelo idioma/formato
+                // Encontra a legenda certa pelo idioma e formato
                 var targetLang = (downloadedSub.Language || '').toLowerCase();
                 var targetFmt  = (downloadedSub.Format  || '').toLowerCase();
+
                 var newSub = streams.find(function(s) {
                     var sLang = (s.Language || '').toLowerCase();
                     var sFmt  = (s.Codec    || '').toLowerCase();
-                    return (targetLang && sLang === targetLang) ||
-                           (targetFmt  && sFmt  === targetFmt);
+                    return targetLang && sLang === targetLang && targetFmt && sFmt === targetFmt;
+                }) || streams.find(function(s) {
+                    return targetLang && (s.Language || '').toLowerCase() === targetLang;
+                }) || streams.find(function(s) {
+                    return targetFmt && (s.Codec || '').toLowerCase() === targetFmt;
                 }) || streams[streams.length - 1];
 
                 var idx = newSub.Index;
-                console.log('[Legendaz] Ativando index=' + idx +
-                    ' lang=' + newSub.Language + ' codec=' + newSub.Codec);
+                console.log('[Legendaz] Ativando index=' + idx + ' lang=' + newSub.Language + ' codec=' + newSub.Codec);
 
-                var pm = window.playbackManager;
-                if (!pm) return;
+                // Passo 3: Sessions API (método mais confiável — envia comando ao cliente)
+                api('GET', 'Sessions?activeWithinSeconds=30')
+                    .then(function(sessions) {
+                        var uid = getUserId();
+                        var session = sessions.find(function(s) {
+                            return s.UserId === uid && s.NowPlayingItem;
+                        }) || sessions.find(function(s) { return s.NowPlayingItem; });
 
-                // Posição atual em ms → ticks (1ms = 10.000 ticks)
-                var ms = 0;
-                try { ms = typeof pm.currentTime === 'function' ? pm.currentTime() : 0; } catch(e) {}
-                var ticks = Math.floor(ms * 10000);
+                        if (session) {
+                            return api('POST', 'Sessions/' + session.Id + '/Command', {
+                                Name: 'SetSubtitleStreamIndex',
+                                Arguments: { Index: idx }
+                            });
+                        }
+                    })
+                    .catch(function() {});
 
-                // Tenta ativar diretamente
-                try { pm.setSubtitleStreamIndex(idx); } catch(e) {}
-
-                // Seek forçado + retry após 1.5s
+                // Passo 4: fallback via playbackManager com parâmetro player correto
                 setTimeout(function() {
-                    try { pm.seek(ticks); } catch(e) {}
-                    setTimeout(function() {
-                        try { pm.setSubtitleStreamIndex(idx); } catch(e) {}
-                    }, 1000);
-                }, 300);
+                    try {
+                        var player = pm && pm.getCurrentPlayer ? pm.getCurrentPlayer() : null;
+                        if (pm && player) {
+                            pm.setSubtitleStreamIndex(player, idx);
+                        } else if (pm) {
+                            pm.setSubtitleStreamIndex(idx);
+                        }
+                        console.log('[Legendaz] setSubtitleStreamIndex(' + idx + ') chamado.');
+                    } catch(e) { console.warn('[Legendaz]', e); }
+                }, 500);
             })
             .catch(function(e) { console.warn('[Legendaz] activateSubtitle:', e); });
     }
