@@ -165,27 +165,67 @@
             });
     }
 
+    function activateSubtitle(itemId, sub) {
+        // Busca as streams atualizadas para encontrar o índice da legenda baixada
+        return api('GET', 'Items/' + itemId + '?fields=MediaStreams')
+            .then(function(item) {
+                var streams = (item.MediaStreams || []).filter(function(s) {
+                    return s.Type === 'Subtitle';
+                });
+                // Pega a última legenda adicionada (recém baixada)
+                var newSub = streams[streams.length - 1];
+                if (!newSub) return;
+
+                var idx = newSub.Index;
+
+                // Tenta ativar via playbackManager do Jellyfin
+                try {
+                    if (window.playbackManager && typeof window.playbackManager.setSubtitleStreamIndex === 'function') {
+                        window.playbackManager.setSubtitleStreamIndex(idx);
+                        console.log('[Legendaz] Legenda ativada via playbackManager, index=' + idx);
+                        return;
+                    }
+                } catch(e) {}
+
+                // Fallback: dispara evento de mudança de legenda
+                try {
+                    var video = document.querySelector('video');
+                    if (video) {
+                        video.dispatchEvent(new CustomEvent('subtitle-change', {
+                            detail: { index: idx }, bubbles: true
+                        }));
+                    }
+                } catch(e) {}
+            })
+            .catch(function() {}); // não crítico, legenda já foi baixada
+    }
+
     function downloadSub(itemId, sub) {
         var container = document.getElementById('lgz-results');
         if (container) {
             container.innerHTML = '<p style="color:#888;font-size:.85rem;text-align:center;padding:20px">⬇️ Baixando legenda…</p>';
         }
 
-        // POST /Items/{id}/RemoteSearch/Subtitles/{subtitleId}
-        // O sub.Id já carrega o provider codificado internamente
         api('POST', 'Items/' + itemId + '/RemoteSearch/Subtitles/' + encodeURIComponent(sub.Id))
             .then(function() {
                 // Avisar o Jellyfin que o item tem conteúdo novo
                 return api('POST', 'Items/' + itemId + '/Refresh?MetadataRefreshMode=None&ImageRefreshMode=None&ReplaceAllMetadata=false&ReplaceAllImages=false');
             })
             .then(function() {
+                // Aguarda refresh propagar e tenta ativar automaticamente
+                return new Promise(function(resolve) { setTimeout(resolve, 1500); });
+            })
+            .then(function() {
+                return activateSubtitle(itemId, sub);
+            })
+            .then(function() {
                 if (container) {
                     container.innerHTML = [
                         '<div style="text-align:center;padding:24px">',
                         '<div style="font-size:2rem;margin-bottom:8px">✅</div>',
-                        '<p style="color:#4c4;font-size:.95rem;font-weight:600">Legenda baixada!</p>',
+                        '<p style="color:#4c4;font-size:.95rem;font-weight:600">Legenda baixada e ativada!</p>',
                         '<p style="color:#888;font-size:.8rem;margin-top:6px">',
-                        'Abra o menu CC para selecionar a legenda.',
+                        'Se não aparecer, selecione no menu CC.',
                         '</p>',
                         '</div>'
                     ].join('');
