@@ -10,6 +10,7 @@
     var PANEL_ID  = 'lgz-panel';
     var _itemId   = null;
     var _lang     = null;
+    var _searchLang = null;
 
     // ── Helpers de API ────────────────────────────────────────────────────────
     function getToken() {
@@ -118,6 +119,7 @@
 
         document.getElementById('lgz-go').addEventListener('click', function() {
             var searchLang = document.getElementById('lgz-lang').value.trim() || lang;
+            _searchLang = searchLang; // guarda para usar no matching
             doSearch(itemId, searchLang);
         });
     }
@@ -170,13 +172,12 @@
     function activateSubtitle(itemId, downloadedSub) {
         var pm = window.playbackManager;
 
-        // Passo 1: seek para forçar reload do PlaybackInfo (player re-busca streams do servidor)
+        // Seek para forçar reload do PlaybackInfo (player re-busca streams do servidor)
         var ms = 0;
         try { ms = pm && typeof pm.currentTime === 'function' ? pm.currentTime() : 0; } catch(e) {}
-        var ticks = Math.floor(ms * 10000); // ms → ticks (1ms = 10.000 ticks)
+        var ticks = Math.floor(ms * 10000);
         try { if (pm) pm.seek(ticks); } catch(e) {}
 
-        // Passo 2: aguarda 2.5s para seek + library refresh propagarem
         return new Promise(function(resolve) { setTimeout(resolve, 2500); })
             .then(function() {
                 return api('GET', 'Items/' + itemId + '?fields=MediaStreams');
@@ -187,46 +188,26 @@
                 });
                 if (!streams.length) return;
 
-                // Mapa de equivalências de códigos de idioma
-                // OpenSubtitles/Bazarr usa códigos diferentes dos do Jellyfin (ISO 639-2)
                 var langAliases = {
-                    'pob': ['por', 'pt', 'pt-br'],
-                    'por': ['pob', 'pt', 'pt-br'],
-                    'pt':  ['pob', 'por', 'pt-br'],
-                    'eng': ['en'],
-                    'en':  ['eng'],
-                    'spa': ['es'],
-                    'es':  ['spa'],
-                    'fra': ['fr'],
-                    'fr':  ['fra'],
-                    'deu': ['de'],
-                    'de':  ['deu', 'ger'],
-                    'ger': ['de', 'deu'],
-                    'jpn': ['ja'],
-                    'ja':  ['jpn'],
-                    'kor': ['ko'],
-                    'ko':  ['kor'],
-                    'zho': ['zh', 'chi'],
-                    'chi': ['zh', 'zho'],
-                    'rus': ['ru'],
-                    'ru':  ['rus'],
-                    'ita': ['it'],
-                    'it':  ['ita'],
-                    'nld': ['nl'],
-                    'nl':  ['nld'],
-                    'pol': ['pl'],
-                    'pl':  ['pol']
+                    'pob': ['por', 'pt', 'pt-br'], 'por': ['pob', 'pt', 'pt-br'],
+                    'pt':  ['pob', 'por', 'pt-br'], 'eng': ['en'],  'en':  ['eng'],
+                    'spa': ['es'],  'es':  ['spa'],  'fra': ['fr'],  'fr':  ['fra'],
+                    'deu': ['de', 'ger'], 'de': ['deu', 'ger'], 'ger': ['de', 'deu'],
+                    'jpn': ['ja'],  'ja':  ['jpn'],  'kor': ['ko'],  'ko':  ['kor'],
+                    'zho': ['zh', 'chi'], 'chi': ['zh', 'zho'],
+                    'rus': ['ru'],  'ru':  ['rus'],  'ita': ['it'],  'it':  ['ita'],
+                    'nld': ['nl'],  'nl':  ['nld'],  'pol': ['pl'],  'pl':  ['pol']
                 };
 
                 function langsMatch(a, b) {
                     if (!a || !b) return false;
                     a = a.toLowerCase(); b = b.toLowerCase();
                     if (a === b) return true;
-                    var aliases = langAliases[a] || [];
-                    return aliases.indexOf(b) !== -1;
+                    return (langAliases[a] || []).indexOf(b) !== -1;
                 }
 
-                var targetLang = (downloadedSub.Language || '').toLowerCase();
+                // downloadedSub.Language pode ser vazio — usa _searchLang como fallback
+                var targetLang = (downloadedSub.Language || _searchLang || '').toLowerCase();
                 var targetFmt  = (downloadedSub.Format  || '').toLowerCase();
 
                 console.log('[Legendaz] Procurando: lang=' + targetLang + ' fmt=' + targetFmt);
@@ -234,51 +215,55 @@
                     console.log('[Legendaz]   stream idx=' + s.Index + ' lang=' + s.Language + ' codec=' + s.Codec + ' ext=' + s.IsExternal);
                 });
 
-                // Busca por lang+fmt, depois lang, depois fmt, depois externa mais recente
                 var newSub = streams.find(function(s) {
-                    return langsMatch(targetLang, s.Language) &&
-                           (s.Codec || '').toLowerCase() === targetFmt;
+                    return langsMatch(targetLang, s.Language) && (s.Codec || '').toLowerCase() === targetFmt;
                 }) || streams.find(function(s) {
                     return langsMatch(targetLang, s.Language);
                 }) || streams.find(function(s) {
                     return (s.Codec || '').toLowerCase() === targetFmt;
-                }) || streams.filter(function(s) {
-                    return s.IsExternal;
-                }).pop() || streams[streams.length - 1];
-
-                console.log('[Legendaz] Escolhido: idx=' + newSub.Index + ' lang=' + newSub.Language + ' codec=' + newSub.Codec);
+                }) || streams.filter(function(s) { return s.IsExternal; }).pop()
+                  || streams[streams.length - 1];
 
                 var idx = newSub.Index;
-                console.log('[Legendaz] Ativando index=' + idx + ' lang=' + newSub.Language + ' codec=' + newSub.Codec);
+                console.log('[Legendaz] Escolhido: idx=' + idx + ' lang=' + newSub.Language + ' codec=' + newSub.Codec);
 
-                // Passo 3: Sessions API (método mais confiável — envia comando ao cliente)
+                // Sessions API — envia comando ao cliente via WebSocket
                 api('GET', 'Sessions?activeWithinSeconds=30')
                     .then(function(sessions) {
                         var uid = getUserId();
                         var session = sessions.find(function(s) {
                             return s.UserId === uid && s.NowPlayingItem;
                         }) || sessions.find(function(s) { return s.NowPlayingItem; });
-
-                        if (session) {
-                            return api('POST', 'Sessions/' + session.Id + '/Command', {
-                                Name: 'SetSubtitleStreamIndex',
-                                Arguments: { Index: idx }
-                            });
-                        }
+                        if (!session) { console.warn('[Legendaz] session não encontrada'); return; }
+                        console.log('[Legendaz] Sessions cmd idx=' + idx + ' session=' + session.Id);
+                        api('POST', 'Sessions/' + session.Id + '/Command', {
+                            Name: 'SetSubtitleStreamIndex',
+                            ControllingUserId: uid,
+                            Arguments: { Index: String(idx) }
+                        }).then(function() {
+                            console.log('[Legendaz] Sessions API ok');
+                        }).catch(function(e) {
+                            console.warn('[Legendaz] Sessions API erro:', e);
+                        });
                     })
                     .catch(function() {});
 
-                // Passo 4: fallback via playbackManager com parâmetro player correto
+                // Fallback: chamar no player diretamente
                 setTimeout(function() {
                     try {
                         var player = pm && pm.getCurrentPlayer ? pm.getCurrentPlayer() : null;
-                        if (pm && player) {
+                        console.log('[Legendaz] player:', player ? player.name || 'ok' : 'null');
+                        if (player && typeof player.setSubtitleStreamIndex === 'function') {
+                            player.setSubtitleStreamIndex(idx);
+                            console.log('[Legendaz] player.setSubtitleStreamIndex(' + idx + ') ok');
+                        } else if (pm && player) {
                             pm.setSubtitleStreamIndex(player, idx);
+                            console.log('[Legendaz] pm.setSubtitleStreamIndex(player,' + idx + ') ok');
                         } else if (pm) {
                             pm.setSubtitleStreamIndex(idx);
+                            console.log('[Legendaz] pm.setSubtitleStreamIndex(' + idx + ') ok');
                         }
-                        console.log('[Legendaz] setSubtitleStreamIndex(' + idx + ') chamado.');
-                    } catch(e) { console.warn('[Legendaz]', e); }
+                    } catch(e) { console.warn('[Legendaz] player erro:', e); }
                 }, 500);
             })
             .catch(function(e) { console.warn('[Legendaz] activateSubtitle:', e); });
@@ -382,6 +367,7 @@
                 .then(function(results) {
                     _itemId = results[0].Id;
                     _lang   = results[1];
+                    _searchLang = results[1]; // idioma inicial
                     showPanel(_itemId, _lang);
                 })
                 .catch(function(err) {
