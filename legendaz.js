@@ -194,35 +194,47 @@
     }
 
     // ── Injeção do botão no menu de legendas ──────────────────────────────────
-    // TODO: Ajustar seletor após inspecionar o DOM do menu de legendas ao vivo.
-    // Candidatos prováveis: '.trackList', '.subtitleTrackMenu', '.popupMenu'
-    var SUBTITLE_MENU_SELECTOR = '.trackList, .popupMenu, .subtitlesMenu';
+    // Estrutura confirmada via DevTools:
+    //   div.actionSheetContent
+    //     h1.actionSheetTitle  → "Legendas" (identifica o menu certo)
+    //     div.actionSheetScroller.scrollY  → itens de legenda
+    //
+    // Palavras-chave do título em diferentes idiomas do Jellyfin
+    var SUBTITLE_TITLES = ['legendas','subtitles','sous-titres','untertitel',
+                           'subtítulos','sottotitoli','ondertitels','субтитры',
+                           '字幕','字幕','자막','napisy','sottotitoli'];
+
+    function findSubtitleMenu() {
+        var sheets = document.querySelectorAll('.actionSheetContent');
+        for (var i = 0; i < sheets.length; i++) {
+            var title = sheets[i].querySelector('.actionSheetTitle');
+            if (title && SUBTITLE_TITLES.indexOf(title.textContent.trim().toLowerCase()) !== -1) {
+                return sheets[i];
+            }
+        }
+        return null;
+    }
 
     function injectButton() {
         if (document.getElementById(BTN_ID)) return;
 
-        var menu = document.querySelector(SUBTITLE_MENU_SELECTOR);
+        var menu = findSubtitleMenu();
         if (!menu) return;
 
-        // Verificar se é o menu de legendas (contém itens de legenda)
-        var hasSubtitleItems = menu.textContent.includes('ASS') ||
-                               menu.textContent.includes('SRT') ||
-                               menu.textContent.includes('Desligado') ||
-                               menu.textContent.includes('Off');
-        if (!hasSubtitleItems) return;
-
-        var btn = document.createElement('div');
+        var btn = document.createElement('button');
         btn.id = BTN_ID;
+        btn.type = 'button';
         btn.style.cssText = [
-            'padding:10px 20px', 'cursor:pointer',
-            'color:#00a4dc', 'font-size:.9rem', 'font-weight:600',
-            'border-top:1px solid #333', 'margin-top:4px',
-            'display:flex', 'align-items:center', 'gap:8px'
+            'width:100%', 'padding:14px 20px', 'cursor:pointer',
+            'color:#00a4dc', 'font-size:.95rem', 'font-weight:600',
+            'background:none', 'border:none', 'border-top:1px solid #333',
+            'margin-top:4px', 'display:flex', 'align-items:center',
+            'gap:10px', 'font-family:inherit'
         ].join(';');
-        btn.innerHTML = '<span>🔍</span><span>Buscar Legendas (Legendaz)</span>';
+        btn.innerHTML = '<span style="font-size:1.1em">🔍</span><span>Buscar Legendas</span>';
 
-        btn.addEventListener('mouseover',  function() { btn.style.background = '#1a2a3a'; });
-        btn.addEventListener('mouseout',   function() { btn.style.background = ''; });
+        btn.addEventListener('mouseover', function() { btn.style.background = 'rgba(0,164,220,.1)'; });
+        btn.addEventListener('mouseout',  function() { btn.style.background = 'none'; });
 
         btn.addEventListener('click', function(e) {
             e.stopPropagation();
@@ -238,7 +250,11 @@
                 });
         });
 
-        menu.appendChild(btn);
+        // Inserir após o scroller, dentro do actionSheetContent
+        var scroller = menu.querySelector('.actionSheetScroller');
+        if (scroller) scroller.after(btn);
+        else menu.appendChild(btn);
+
         console.log('[Legendaz] Botão injetado no menu de legendas.');
     }
 
