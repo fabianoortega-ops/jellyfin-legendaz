@@ -1,5 +1,5 @@
 /**
- * Legendaz — Jellyfin Subtitle Search
+ * Legendaz — Jellyfin Subtitle Search v2
  * Adiciona um botão de busca diretamente no menu de legendas do player.
  * Servido via GitHub Pages — git push = atualização sem reiniciar o Jellyfin.
  */
@@ -167,39 +167,44 @@
             });
     }
 
-    function activateSubtitle(itemId, sub) {
-        // Busca as streams atualizadas para encontrar o índice da legenda baixada
+    function activateSubtitle(itemId) {
         return api('GET', 'Items/' + itemId + '?fields=MediaStreams')
             .then(function(item) {
                 var streams = (item.MediaStreams || []).filter(function(s) {
                     return s.Type === 'Subtitle';
                 });
-                // Pega a última legenda adicionada (recém baixada)
+                if (!streams.length) return null;
+
+                // Última stream = recém baixada
                 var newSub = streams[streams.length - 1];
-                if (!newSub) return;
-
                 var idx = newSub.Index;
+                var name = newSub.DisplayTitle || newSub.Language || 'legenda';
+                console.log('[Legendaz] Ativando index=' + idx + ' (' + name + ')');
 
-                // Tenta ativar via playbackManager do Jellyfin
-                try {
-                    if (window.playbackManager && typeof window.playbackManager.setSubtitleStreamIndex === 'function') {
-                        window.playbackManager.setSubtitleStreamIndex(idx);
-                        console.log('[Legendaz] Legenda ativada via playbackManager, index=' + idx);
-                        return;
-                    }
-                } catch(e) {}
+                var pm = window.playbackManager;
+                if (!pm) return name;
 
-                // Fallback: dispara evento de mudança de legenda
-                try {
-                    var video = document.querySelector('video');
-                    if (video) {
-                        video.dispatchEvent(new CustomEvent('subtitle-change', {
-                            detail: { index: idx }, bubbles: true
-                        }));
-                    }
-                } catch(e) {}
+                // currentTime() retorna ms; seek() espera ticks (1ms = 10.000 ticks)
+                var ms = 0;
+                try { ms = pm.currentTime ? pm.currentTime() : 0; } catch(e) {}
+                var ticks = Math.floor(ms * 10000);
+
+                // Seek para posição atual força o player a recarregar a media source
+                try { pm.seek(ticks); } catch(e) {}
+
+                // Após o reload, define a nova legenda
+                setTimeout(function() {
+                    try {
+                        if (typeof pm.setSubtitleStreamIndex === 'function') {
+                            pm.setSubtitleStreamIndex(idx);
+                            console.log('[Legendaz] Legenda ' + idx + ' ativada.');
+                        }
+                    } catch(e) { console.warn('[Legendaz]', e); }
+                }, 1000);
+
+                return name;
             })
-            .catch(function() {}); // não crítico, legenda já foi baixada
+            .catch(function() { return null; });
     }
 
     function downloadSub(itemId, sub) {
@@ -218,12 +223,11 @@
                 return new Promise(function(resolve) { setTimeout(resolve, 1500); });
             })
             .then(function() {
-                reloadSubtitleList();
-                return activateSubtitle(itemId, sub);
+                return activateSubtitle(itemId);
             })
-            .then(function() {
+            .then(function(subName) {
                 removePanel();
-                showToast('✅ Legenda baixada! Selecione no menu CC.');
+                showToast('✅ ' + (subName || sub.Name || 'Legenda') + ' baixada!');
             })
             .catch(function(err) {
                 removePanel();
@@ -268,18 +272,9 @@
         }, 3500);
     }
 
-    // ── Força o player a recarregar a lista de legendas ───────────────────────
+    // ── Força o player a recarregar source e selecionar legenda ─────────────
     function reloadSubtitleList() {
-        var video = document.querySelector('video');
-        if (!video || video.paused) return;
-        // Micro-seek: avança 0.01s e volta — faz o player reler as streams
-        var t = video.currentTime;
-        video.currentTime = t + 0.01;
-        setTimeout(function() {
-            if (Math.abs(video.currentTime - (t + 0.01)) < 0.1) {
-                video.currentTime = t;
-            }
-        }, 200);
+        // Nada — reload real é feito dentro de activateSubtitle
     }
 
     // ── Injeção do botão no OSD do player ───────────────────────────────────
