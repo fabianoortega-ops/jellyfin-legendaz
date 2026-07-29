@@ -96,13 +96,26 @@ if (-not $GitHubToken) {
     }
     $releaseBody = @{ tag_name = $TagName; name = "Legendaz $TagName"; body = "Legendaz $Version"; draft = $false; prerelease = $false } | ConvertTo-Json
     try {
-        $release   = Invoke-RestMethod -Uri "https://api.github.com/repos/$GitHubUser/$RepoSlug/releases" -Method POST -Headers $headers -Body $releaseBody -ContentType "application/json"
-        $uploadUrl = $release.upload_url -replace '\{.*\}', "?name=$ZipName"
-        $zipBytes  = [System.IO.File]::ReadAllBytes($ZipDest)
+        # Verificar se o release já existe
+        $existingRelease = $null
+        try {
+            $existingRelease = Invoke-RestMethod -Uri "https://api.github.com/repos/$GitHubUser/$RepoSlug/releases/tags/$TagName" -Headers $headers
+        } catch {}
+
+        if ($existingRelease) {
+            Write-Host "      Release $TagName já existe — fazendo upload do zip..."
+            $uploadUrl = $existingRelease.upload_url -replace '\{.*\}', "?name=$ZipName"
+        } else {
+            $release   = Invoke-RestMethod -Uri "https://api.github.com/repos/$GitHubUser/$RepoSlug/releases" -Method POST -Headers $headers -Body $releaseBody -ContentType "application/json"
+            $uploadUrl = $release.upload_url -replace '\{.*\}', "?name=$ZipName"
+            Write-Host "      Release $TagName criado!"
+        }
+
+        $zipBytes = [System.IO.File]::ReadAllBytes($ZipDest)
         Invoke-RestMethod -Uri $uploadUrl -Method POST -Headers $headers -Body $zipBytes -ContentType "application/octet-stream" | Out-Null
-        Write-Host "      Release $TagName criado!"
+        Write-Host "      Zip enviado com sucesso!"
     } catch {
-        Write-Warning "Erro ao criar release: $_"
+        Write-Warning "Erro ao criar/atualizar release: $_"
     }
 }
 
