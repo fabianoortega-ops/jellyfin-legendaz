@@ -187,19 +187,66 @@
                 });
                 if (!streams.length) return;
 
-                // Encontra a legenda certa pelo idioma e formato
+                // Mapa de equivalências de códigos de idioma
+                // OpenSubtitles/Bazarr usa códigos diferentes dos do Jellyfin (ISO 639-2)
+                var langAliases = {
+                    'pob': ['por', 'pt', 'pt-br'],
+                    'por': ['pob', 'pt', 'pt-br'],
+                    'pt':  ['pob', 'por', 'pt-br'],
+                    'eng': ['en'],
+                    'en':  ['eng'],
+                    'spa': ['es'],
+                    'es':  ['spa'],
+                    'fra': ['fr'],
+                    'fr':  ['fra'],
+                    'deu': ['de'],
+                    'de':  ['deu', 'ger'],
+                    'ger': ['de', 'deu'],
+                    'jpn': ['ja'],
+                    'ja':  ['jpn'],
+                    'kor': ['ko'],
+                    'ko':  ['kor'],
+                    'zho': ['zh', 'chi'],
+                    'chi': ['zh', 'zho'],
+                    'rus': ['ru'],
+                    'ru':  ['rus'],
+                    'ita': ['it'],
+                    'it':  ['ita'],
+                    'nld': ['nl'],
+                    'nl':  ['nld'],
+                    'pol': ['pl'],
+                    'pl':  ['pol']
+                };
+
+                function langsMatch(a, b) {
+                    if (!a || !b) return false;
+                    a = a.toLowerCase(); b = b.toLowerCase();
+                    if (a === b) return true;
+                    var aliases = langAliases[a] || [];
+                    return aliases.indexOf(b) !== -1;
+                }
+
                 var targetLang = (downloadedSub.Language || '').toLowerCase();
                 var targetFmt  = (downloadedSub.Format  || '').toLowerCase();
 
+                console.log('[Legendaz] Procurando: lang=' + targetLang + ' fmt=' + targetFmt);
+                streams.forEach(function(s) {
+                    console.log('[Legendaz]   stream idx=' + s.Index + ' lang=' + s.Language + ' codec=' + s.Codec + ' ext=' + s.IsExternal);
+                });
+
+                // Busca por lang+fmt, depois lang, depois fmt, depois externa mais recente
                 var newSub = streams.find(function(s) {
-                    var sLang = (s.Language || '').toLowerCase();
-                    var sFmt  = (s.Codec    || '').toLowerCase();
-                    return targetLang && sLang === targetLang && targetFmt && sFmt === targetFmt;
+                    return langsMatch(targetLang, s.Language) &&
+                           (s.Codec || '').toLowerCase() === targetFmt;
                 }) || streams.find(function(s) {
-                    return targetLang && (s.Language || '').toLowerCase() === targetLang;
+                    return langsMatch(targetLang, s.Language);
                 }) || streams.find(function(s) {
-                    return targetFmt && (s.Codec || '').toLowerCase() === targetFmt;
-                }) || streams[streams.length - 1];
+                    return (s.Codec || '').toLowerCase() === targetFmt;
+                }) || streams.filter(function(s) {
+                    return s.IsExternal;
+                }).pop() || streams[streams.length - 1];
+
+                console.log('[Legendaz] Escolhido: idx=' + newSub.Index + ' lang=' + newSub.Language + ' codec=' + newSub.Codec);
 
                 var idx = newSub.Index;
                 console.log('[Legendaz] Ativando index=' + idx + ' lang=' + newSub.Language + ' codec=' + newSub.Codec);
