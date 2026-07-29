@@ -34,7 +34,9 @@
             body: body ? JSON.stringify(body) : undefined
         }).then(function(r) {
             if (!r.ok) throw new Error('HTTP ' + r.status);
-            return r.json();
+            // 204 No Content — sem body (download, refresh, etc.)
+            if (r.status === 204 || r.headers.get('content-length') === '0') return null;
+            return r.json().catch(function() { return null; });
         });
     }
 
@@ -262,7 +264,7 @@
         btn.id        = BTN_ID;
         btn.type      = 'button';
         btn.className = 'paper-icon-button-light';
-        btn.title     = 'Legendaz — Buscar Legendas';
+        btn.title     = 'Buscar Legendas';
         btn.style.cssText = 'vertical-align:middle;margin:0 2px;padding:0;background:none;border:none;cursor:pointer;color:inherit;';
         btn.innerHTML = '<span class="material-icons" style="font-size:22px">subtitles</span>';
 
