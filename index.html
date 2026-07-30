@@ -1,0 +1,297 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Legendaz — Jellyfin Subtitle Search</title>
+  <meta name="description" content="Search and download subtitles directly from the Jellyfin player. One button. Search. Download. Done.">
+  <meta property="og:title" content="Legendaz — Jellyfin Subtitle Search">
+  <meta property="og:description" content="Search and download subtitles directly from the Jellyfin player.">
+  <meta property="og:url" content="https://fabianoortega-ops.github.io/jellyfin-legendaz/">
+  <meta property="og:image" content="https://fabianoortega-ops.github.io/jellyfin-legendaz/social.svg">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:image" content="https://fabianoortega-ops.github.io/jellyfin-legendaz/social.svg">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      --bg: #101010;
+      --bg2: #1a1a1a;
+      --blue: #00a4dc;
+      --text: #e0e0e0;
+      --muted: #888;
+      --border: #2a2a2a;
+      --radius: 12px;
+    }
+    body { background: var(--bg); color: var(--text); font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; line-height: 1.6; }
+    a { color: var(--blue); text-decoration: none; }
+    a:hover { text-decoration: underline; }
+
+    .hero {
+      background: radial-gradient(ellipse at center, #001a24 0%, #0a0a0a 70%);
+      text-align: center;
+      padding: 80px 24px 60px;
+      border-bottom: 1px solid var(--border);
+    }
+    .hero img { width: 120px; height: 120px; margin-bottom: 20px; }
+    .hero h1 { font-size: clamp(2rem, 5vw, 3.5rem); font-weight: 700; margin-bottom: 16px; }
+    .hero h1 span { color: var(--blue); }
+    .hero p { font-size: 1.15rem; color: var(--muted); max-width: 560px; margin: 0 auto 12px; }
+    .hero .sub { font-size: .9rem; }
+
+    .badges { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; margin: 28px 0 0; }
+    .badge {
+      background: rgba(0,164,220,.08); border: 1px solid rgba(0,164,220,.3);
+      color: var(--blue); padding: 6px 14px; border-radius: 20px; font-size: .85rem;
+    }
+
+    .cta { display: flex; gap: 12px; justify-content: center; margin-top: 32px; flex-wrap: wrap; }
+    .btn-primary {
+      background: var(--blue); color: #000; font-weight: 700;
+      padding: 12px 28px; border-radius: 8px; font-size: 1rem;
+      transition: opacity .2s;
+    }
+    .btn-primary:hover { opacity: .85; text-decoration: none; }
+    .btn-secondary {
+      background: transparent; color: var(--text); font-weight: 600;
+      padding: 12px 28px; border-radius: 8px; font-size: 1rem;
+      border: 1px solid var(--border); transition: border-color .2s;
+    }
+    .btn-secondary:hover { border-color: var(--blue); text-decoration: none; }
+
+    .container { max-width: 900px; margin: 0 auto; padding: 0 24px; }
+    section { padding: 60px 0; border-bottom: 1px solid var(--border); }
+    section:last-child { border-bottom: none; }
+    h2 { font-size: 1.6rem; font-weight: 700; margin-bottom: 32px; }
+
+    .features { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 20px; }
+    .feature {
+      background: var(--bg2); border: 1px solid var(--border);
+      border-radius: var(--radius); padding: 24px;
+    }
+    .feature .icon { font-size: 2rem; margin-bottom: 12px; }
+    .feature h3 { font-size: 1rem; font-weight: 600; margin-bottom: 8px; }
+    .feature p { font-size: .875rem; color: var(--muted); }
+
+    .install-steps { display: flex; flex-direction: column; gap: 20px; }
+    .step {
+      background: var(--bg2); border: 1px solid var(--border);
+      border-radius: var(--radius); padding: 24px;
+      display: flex; gap: 20px; align-items: flex-start;
+    }
+    .step-num {
+      background: var(--blue); color: #000; font-weight: 700;
+      width: 32px; height: 32px; border-radius: 50%;
+      display: flex; align-items: center; justify-content: center;
+      flex-shrink: 0; font-size: .9rem;
+    }
+    .step h3 { font-size: 1rem; font-weight: 600; margin-bottom: 6px; }
+    .step p { font-size: .875rem; color: var(--muted); margin-bottom: 10px; }
+    .code {
+      background: #0d0d0d; border: 1px solid var(--border);
+      border-radius: 6px; padding: 10px 14px;
+      font-family: 'SF Mono', 'Fira Code', monospace; font-size: .82rem;
+      color: var(--blue); word-break: break-all;
+    }
+    .note {
+      background: rgba(0,164,220,.06); border-left: 3px solid var(--blue);
+      padding: 12px 16px; border-radius: 0 6px 6px 0;
+      font-size: .85rem; color: var(--muted); margin-top: 10px;
+    }
+
+    .lang-grid {
+      display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+      gap: 10px;
+    }
+    .lang-item {
+      background: var(--bg2); border: 1px solid var(--border);
+      border-radius: 8px; padding: 10px 14px;
+      font-size: .85rem; display: flex; justify-content: space-between;
+    }
+    .lang-item .code-tag {
+      color: var(--blue); font-family: monospace; font-size: .8rem;
+    }
+
+    .community-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px; }
+    .community-item {
+      background: var(--bg2); border: 1px solid var(--border);
+      border-radius: var(--radius); padding: 16px 20px;
+      display: flex; align-items: center; gap: 12px;
+      transition: border-color .2s;
+    }
+    .community-item:hover { border-color: var(--blue); text-decoration: none; }
+    .community-item span:first-child { font-size: 1.4rem; }
+    .community-item .label { font-size: .85rem; color: var(--muted); }
+    .community-item .name { font-size: .95rem; font-weight: 600; color: var(--text); }
+
+    footer {
+      text-align: center; padding: 40px 24px;
+      font-size: .85rem; color: var(--muted);
+      border-top: 1px solid var(--border);
+    }
+    footer a { color: var(--muted); }
+    footer a:hover { color: var(--blue); }
+  </style>
+</head>
+<body>
+
+<div class="hero">
+  <img src="logo.svg" alt="Legendaz">
+  <h1>Legenda<span>z</span></h1>
+  <p>Search and download subtitles directly from the Jellyfin player — integrated with Bazarr and OpenSubtitles.</p>
+  <p class="sub muted">One button. Search. Download. Done.</p>
+  <div class="badges">
+    <span class="badge">Jellyfin 10.11.x</span>
+    <span class="badge">Requires JavaScript Injector</span>
+    <span class="badge">Requires Bazarr</span>
+    <span class="badge">25 languages</span>
+    <span class="badge">Open Source MIT</span>
+  </div>
+  <div class="cta">
+    <a class="btn-primary" href="#installation">⚡ Install Now</a>
+    <a class="btn-secondary" href="https://github.com/fabianoortega-ops/jellyfin-legendaz">⬡ GitHub</a>
+  </div>
+</div>
+
+<div class="container">
+
+  <section>
+    <h2>✨ Features</h2>
+    <div class="features">
+      <div class="feature">
+        <div class="icon">🔍</div>
+        <h3>In-Player Search</h3>
+        <p>Search button in the OSD, right next to the subtitle button — no leaving the player.</p>
+      </div>
+      <div class="feature">
+        <div class="icon">⬇️</div>
+        <h3>One-Click Download</h3>
+        <p>Click a result and the subtitle is downloaded, the library updated, and the track activated automatically.</p>
+      </div>
+      <div class="feature">
+        <div class="icon">🎯</div>
+        <h3>Auto-Select</h3>
+        <p>After download, the new subtitle is automatically selected — no manual CC menu interaction needed.</p>
+      </div>
+      <div class="feature">
+        <div class="icon">🌍</div>
+        <h3>25 Languages</h3>
+        <p>Interface language auto-detected from your browser or Jellyfin profile preferences.</p>
+      </div>
+      <div class="feature">
+        <div class="icon">🔗</div>
+        <h3>Bazarr Integration</h3>
+        <p>Works through the Bazarr plugin — searches OpenSubtitles, Subscene, and all your configured providers.</p>
+      </div>
+      <div class="feature">
+        <div class="icon">🚀</div>
+        <h3>Hot Reload</h3>
+        <p>UI updates via git push — no server restart needed after changing the player script.</p>
+      </div>
+    </div>
+  </section>
+
+  <section id="installation">
+    <h2>📦 Installation</h2>
+    <div class="install-steps">
+
+      <div class="step">
+        <div class="step-num">1</div>
+        <div>
+          <h3>Install JavaScript Injector (required)</h3>
+          <p>Go to <strong>Dashboard → Plugins → Repositories → +</strong> and add:</p>
+          <div class="code">https://raw.githubusercontent.com/n00bcodr/jellyfin-plugins/main/10.11/manifest.json</div>
+          <p style="margin-top:10px">Then go to <strong>Catalog</strong>, find <strong>JavaScript Injector</strong> and install it. Restart Jellyfin.</p>
+          <div class="note">🐳 Docker / TrueNAS: if you see a permission error on index.html, also install <a href="https://github.com/IAmParadox27/jellyfin-plugin-file-transformation">File Transformation</a> (v2.2.1.0+).</div>
+        </div>
+      </div>
+
+      <div class="step">
+        <div class="step-num">2</div>
+        <div>
+          <h3>Install Bazarr plugin (required)</h3>
+          <p>Go to <strong>Dashboard → Plugins → Repositories → +</strong> and add the <a href="https://github.com/enoch85/bazarr-jellyfin">Bazarr Jellyfin plugin</a> repository. Install and configure it with your Bazarr URL and API key.</p>
+        </div>
+      </div>
+
+      <div class="step">
+        <div class="step-num">3</div>
+        <div>
+          <h3>Install Legendaz</h3>
+          <p>Go to <strong>Dashboard → Plugins → Repositories → +</strong> and add:</p>
+          <div class="code">https://fabianoortega-ops.github.io/jellyfin-legendaz/manifest.json</div>
+          <p style="margin-top:10px">Go to <strong>Catalog → Subtitles</strong>, find <strong>Legendaz</strong> and install it.</p>
+        </div>
+      </div>
+
+      <div class="step">
+        <div class="step-num">4</div>
+        <div>
+          <h3>Restart Jellyfin</h3>
+          <p>Restart once to load all plugins. The 🔍 button will appear in the player OSD, next to the subtitle button.</p>
+        </div>
+      </div>
+
+    </div>
+  </section>
+
+  <section id="languages">
+    <h2>🌍 Supported Languages</h2>
+    <p style="color:var(--muted);margin-bottom:24px;font-size:.9rem">The search interface is automatically shown in your browser's language.</p>
+    <div class="lang-grid">
+      <div class="lang-item">English <span class="code-tag">en</span></div>
+      <div class="lang-item">Português <span class="code-tag">pt</span></div>
+      <div class="lang-item">Deutsch <span class="code-tag">de</span></div>
+      <div class="lang-item">Français <span class="code-tag">fr</span></div>
+      <div class="lang-item">Español <span class="code-tag">es</span></div>
+      <div class="lang-item">Italiano <span class="code-tag">it</span></div>
+      <div class="lang-item">Nederlands <span class="code-tag">nl</span></div>
+      <div class="lang-item">Русский <span class="code-tag">ru</span></div>
+      <div class="lang-item">中文 <span class="code-tag">zh</span></div>
+      <div class="lang-item">日本語 <span class="code-tag">ja</span></div>
+      <div class="lang-item">한국어 <span class="code-tag">ko</span></div>
+      <div class="lang-item">Polski <span class="code-tag">pl</span></div>
+      <div class="lang-item">Svenska <span class="code-tag">sv</span></div>
+      <div class="lang-item">Norsk <span class="code-tag">nb</span></div>
+      <div class="lang-item">Dansk <span class="code-tag">da</span></div>
+      <div class="lang-item">Suomi <span class="code-tag">fi</span></div>
+      <div class="lang-item">Čeština <span class="code-tag">cs</span></div>
+      <div class="lang-item">Slovenčina <span class="code-tag">sk</span></div>
+      <div class="lang-item">Magyar <span class="code-tag">hu</span></div>
+      <div class="lang-item">Română <span class="code-tag">ro</span></div>
+      <div class="lang-item">Türkçe <span class="code-tag">tr</span></div>
+      <div class="lang-item">العربية <span class="code-tag">ar</span></div>
+      <div class="lang-item">Українська <span class="code-tag">uk</span></div>
+      <div class="lang-item">Ελληνικά <span class="code-tag">el</span></div>
+      <div class="lang-item">Català <span class="code-tag">ca</span></div>
+    </div>
+  </section>
+
+  <section>
+    <h2>💬 Community</h2>
+    <div class="community-grid">
+      <a class="community-item" href="https://discord.gg/zHBxVSXdBV">
+        <span>💬</span><div><div class="name">Discord</div><div class="label">Official Jellyfin</div></div>
+      </a>
+      <a class="community-item" href="https://discord.gg/N3M99fNxbK">
+        <span>💬</span><div><div class="name">Discord</div><div class="label">Community</div></div>
+      </a>
+      <a class="community-item" href="https://forum.jellyfin.org">
+        <span>🌐</span><div><div class="name">Forum</div><div class="label">forum.jellyfin.org</div></div>
+      </a>
+      <a class="community-item" href="https://www.reddit.com/r/jellyfin">
+        <span>🟠</span><div><div class="name">Reddit</div><div class="label">r/jellyfin</div></div>
+      </a>
+    </div>
+  </section>
+
+</div>
+
+<footer>
+  Made with ♥ for the <a href="https://jellyfin.org">Jellyfin</a> community &nbsp;·&nbsp;
+  <a href="https://github.com/fabianoortega-ops/jellyfin-legendaz">GitHub</a> &nbsp;·&nbsp;
+  <a href="https://github.com/fabianoortega-ops/jellyfin-legendaz/releases">Releases</a> &nbsp;·&nbsp;
+  MIT License
+</footer>
+
+</body>
+</html>

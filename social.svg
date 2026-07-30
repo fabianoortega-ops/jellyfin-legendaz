@@ -1,0 +1,31 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1280 640">
+  <defs>
+    <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#0a0a0a"/>
+      <stop offset="40%" stop-color="#001a24"/>
+      <stop offset="100%" stop-color="#0a0a0a"/>
+    </linearGradient>
+    <linearGradient id="glow" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#00a4dc" stop-opacity="0.15"/>
+      <stop offset="100%" stop-color="#00a4dc" stop-opacity="0"/>
+    </linearGradient>
+  </defs>
+  <rect width="1280" height="640" fill="url(#bg)"/>
+  <circle cx="640" cy="320" r="400" fill="url(#glow)"/>
+  <line x1="0" y1="213" x2="1280" y2="213" stroke="#ffffff" stroke-width="0.5" opacity="0.04"/>
+  <line x1="0" y1="427" x2="1280" y2="427" stroke="#ffffff" stroke-width="0.5" opacity="0.04"/>
+  <line x1="427" y1="0" x2="427" y2="640" stroke="#ffffff" stroke-width="0.5" opacity="0.04"/>
+  <line x1="853" y1="0" x2="853" y2="640" stroke="#ffffff" stroke-width="0.5" opacity="0.04"/>
+  <text x="180" y="340" font-size="160" text-anchor="middle">🔍</text>
+  <text x="700" y="265" font-family="-apple-system,BlinkMacSystemFont,Segoe UI,sans-serif" font-size="76" font-weight="700" text-anchor="middle">
+    <tspan fill="#ffffff">Legenda</tspan><tspan fill="#00a4dc">z</tspan>
+  </text>
+  <text x="700" y="355" font-family="-apple-system,BlinkMacSystemFont,Segoe UI,sans-serif" font-size="26" fill="#888888" text-anchor="middle">Search and download subtitles directly from the Jellyfin player</text>
+  <rect x="480" y="395" width="160" height="38" rx="19" fill="#00a4dc" opacity="0.15" stroke="#00a4dc" stroke-width="1"/>
+  <text x="560" y="419" font-family="-apple-system,BlinkMacSystemFont,Segoe UI,sans-serif" font-size="16" fill="#00a4dc" text-anchor="middle">Jellyfin 10.11</text>
+  <rect x="656" y="395" width="130" height="38" rx="19" fill="#00a4dc" opacity="0.15" stroke="#00a4dc" stroke-width="1"/>
+  <text x="721" y="419" font-family="-apple-system,BlinkMacSystemFont,Segoe UI,sans-serif" font-size="16" fill="#00a4dc" text-anchor="middle">25 languages</text>
+  <rect x="802" y="395" width="100" height="38" rx="19" fill="#00a4dc" opacity="0.15" stroke="#00a4dc" stroke-width="1"/>
+  <text x="852" y="419" font-family="-apple-system,BlinkMacSystemFont,Segoe UI,sans-serif" font-size="16" fill="#00a4dc" text-anchor="middle">MIT License</text>
+  <text x="640" y="580" font-family="-apple-system,BlinkMacSystemFont,Segoe UI,sans-serif" font-size="20" fill="#444444" text-anchor="middle">fabianoortega-ops.github.io/jellyfin-legendaz</text>
+</svg>
