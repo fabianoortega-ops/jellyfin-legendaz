@@ -1,18 +1,10 @@
-/**
- * Legendaz — Jellyfin Subtitle Search v2
- * Adiciona um botão de busca diretamente no menu de legendas do player.
- * Servido via GitHub Pages — git push = atualização sem reiniciar o Jellyfin.
- */
 (function () {
     'use strict';
-
     var BTN_ID    = 'lgz-search-btn';
     var PANEL_ID  = 'lgz-panel';
     var _itemId   = null;
     var _lang     = null;
     var _searchLang = null;
-
-    // ── Helpers de API ────────────────────────────────────────────────────────
     function getToken() {
         try {
             var ac = window.ApiClient;
@@ -35,13 +27,10 @@
             body: body ? JSON.stringify(body) : undefined
         }).then(function(r) {
             if (!r.ok) throw new Error('HTTP ' + r.status);
-            // 204 No Content — sem body (download, refresh, etc.)
             if (r.status === 204 || r.headers.get('content-length') === '0') return null;
             return r.json().catch(function() { return null; });
         });
     }
-
-    // ── Obtém item atual via Sessions API ────────────────────────────────────
     function getCurrentItem() {
         return api('GET', 'Sessions?activeWithinSeconds=30')
             .then(function(sessions) {
@@ -52,33 +41,25 @@
                 return mine.NowPlayingItem;
             });
     }
-
-    // ── Obtém idioma de legenda preferido do perfil do usuário ────────────────
     function getUserSubtitleLang() {
         var uid = getUserId();
         if (!uid) return Promise.resolve('pt');
         return api('GET', 'Users/' + uid)
             .then(function(user) {
-                // SubtitleLanguagePreference ex: "por", "pt", "pt-BR"
                 var pref = user.Configuration && user.Configuration.SubtitleLanguagePreference;
                 if (pref && pref.length > 0) return pref;
-                // Fallback: idioma do browser
                 return (navigator.language || 'pt').split('-')[0];
             })
             .catch(function() {
                 return (navigator.language || 'pt').split('-')[0];
             });
     }
-
-    // ── Painel de busca ──────────────────────────────────────────────────────
     function removePanel() {
         var p = document.getElementById(PANEL_ID);
         if (p) p.remove();
     }
-
     function showPanel(itemId, lang) {
         removePanel();
-
         var panel = document.createElement('div');
         panel.id = PANEL_ID;
         panel.style.cssText = [
@@ -90,7 +71,6 @@
             'display:flex', 'flex-direction:column',
             'font-family:-apple-system,BlinkMacSystemFont,Segoe UI,sans-serif'
         ].join(';');
-
         panel.innerHTML = [
             '<div style="padding:14px 16px;border-bottom:1px solid #333;display:flex;align-items:center;justify-content:space-between">',
             '  <span style="font-weight:600;color:#e0e0e0;font-size:.95rem">🔍 Legendaz</span>',
@@ -112,27 +92,21 @@
             '  </p>',
             '</div>'
         ].join('');
-
         document.body.appendChild(panel);
-
         document.getElementById('lgz-close').addEventListener('click', removePanel);
-
         document.getElementById('lgz-go').addEventListener('click', function() {
             var searchLang = document.getElementById('lgz-lang').value.trim() || lang;
-            _searchLang = searchLang; // guarda para usar no matching
+            _searchLang = searchLang;
             doSearch(itemId, searchLang);
         });
     }
-
     function renderResults(itemId, results) {
         var container = document.getElementById('lgz-results');
         if (!container) return;
-
         if (!results || results.length === 0) {
             container.innerHTML = '<p style="color:#666;font-size:.85rem;text-align:center;padding:20px">Nenhuma legenda encontrada.</p>';
             return;
         }
-
         container.innerHTML = '';
         results.slice(0, 20).forEach(function(sub) {
             var row = document.createElement('div');
@@ -147,20 +121,16 @@
                     (sub.IsForced ? ' · Forced' : ''),
                 '</div>'
             ].join('');
-
             row.addEventListener('mouseover',  function() { row.style.background = '#252525'; });
             row.addEventListener('mouseout',   function() { row.style.background = ''; });
             row.addEventListener('click', function() { downloadSub(itemId, sub); });
-
             container.appendChild(row);
         });
     }
-
     function doSearch(itemId, lang) {
         var container = document.getElementById('lgz-results');
         if (!container) return;
         container.innerHTML = '<p style="color:#888;font-size:.85rem;text-align:center;padding:20px">⏳ Buscando… (pode levar alguns minutos)</p>';
-
         api('GET', 'Items/' + itemId + '/RemoteSearch/Subtitles/' + encodeURIComponent(lang))
             .then(function(results) { renderResults(itemId, results); })
             .catch(function(err) {
@@ -168,16 +138,12 @@
                 container.innerHTML = '<p style="color:#f66;font-size:.85rem;text-align:center;padding:20px">Erro: ' + escHtml(err.message) + '</p>';
             });
     }
-
     function activateSubtitle(itemId, downloadedSub) {
         var pm = window.playbackManager;
-
-        // Seek para forçar reload do PlaybackInfo (player re-busca streams do servidor)
         var ms = 0;
         try { ms = pm && typeof pm.currentTime === 'function' ? pm.currentTime() : 0; } catch(e) {}
         var ticks = Math.floor(ms * 10000);
         try { if (pm) pm.seek(ticks); } catch(e) {}
-
         return new Promise(function(resolve) { setTimeout(resolve, 2500); })
             .then(function() {
                 return api('GET', 'Items/' + itemId + '?fields=MediaStreams');
@@ -187,7 +153,6 @@
                     return s.Type === 'Subtitle';
                 });
                 if (!streams.length) return;
-
                 var langAliases = {
                     'pob': ['por', 'pt', 'pt-br'], 'por': ['pob', 'pt', 'pt-br'],
                     'pt':  ['pob', 'por', 'pt-br'], 'eng': ['en'],  'en':  ['eng'],
@@ -198,23 +163,16 @@
                     'rus': ['ru'],  'ru':  ['rus'],  'ita': ['it'],  'it':  ['ita'],
                     'nld': ['nl'],  'nl':  ['nld'],  'pol': ['pl'],  'pl':  ['pol']
                 };
-
                 function langsMatch(a, b) {
                     if (!a || !b) return false;
                     a = a.toLowerCase(); b = b.toLowerCase();
                     if (a === b) return true;
                     return (langAliases[a] || []).indexOf(b) !== -1;
                 }
-
-                // downloadedSub.Language pode ser vazio — usa _searchLang como fallback
                 var targetLang = (downloadedSub.Language || _searchLang || '').toLowerCase();
                 var targetFmt  = (downloadedSub.Format  || '').toLowerCase();
-
-                console.log('[Legendaz] Procurando: lang=' + targetLang + ' fmt=' + targetFmt);
                 streams.forEach(function(s) {
-                    console.log('[Legendaz]   stream idx=' + s.Index + ' lang=' + s.Language + ' codec=' + s.Codec + ' ext=' + s.IsExternal);
                 });
-
                 var newSub = streams.find(function(s) {
                     return langsMatch(targetLang, s.Language) && (s.Codec || '').toLowerCase() === targetFmt;
                 }) || streams.find(function(s) {
@@ -223,11 +181,7 @@
                     return (s.Codec || '').toLowerCase() === targetFmt;
                 }) || streams.filter(function(s) { return s.IsExternal; }).pop()
                   || streams[streams.length - 1];
-
                 var idx = newSub.Index;
-                console.log('[Legendaz] Escolhido: idx=' + idx + ' lang=' + newSub.Language + ' codec=' + newSub.Codec);
-
-                // Sessions API — envia comando ao cliente via WebSocket
                 api('GET', 'Sessions?activeWithinSeconds=30')
                     .then(function(sessions) {
                         var uid = getUserId();
@@ -235,53 +189,30 @@
                             return s.UserId === uid && s.NowPlayingItem;
                         }) || sessions.find(function(s) { return s.NowPlayingItem; });
                         if (!session) { console.warn('[Legendaz] session não encontrada'); return; }
-                        console.log('[Legendaz] Sessions cmd idx=' + idx + ' session=' + session.Id);
                         api('POST', 'Sessions/' + session.Id + '/Command', {
                             Name: 'SetSubtitleStreamIndex',
                             ControllingUserId: uid,
                             Arguments: { Index: String(idx) }
                         }).then(function() {
-                            console.log('[Legendaz] Sessions API ok');
                         }).catch(function(e) {
                             console.warn('[Legendaz] Sessions API erro:', e);
                         });
                     })
                     .catch(function() {});
 
-                // Fallback: chamar no player diretamente
-                setTimeout(function() {
-                    try {
-                        var player = pm && pm.getCurrentPlayer ? pm.getCurrentPlayer() : null;
-                        console.log('[Legendaz] player:', player ? player.name || 'ok' : 'null');
-                        if (player && typeof player.setSubtitleStreamIndex === 'function') {
-                            player.setSubtitleStreamIndex(idx);
-                            console.log('[Legendaz] player.setSubtitleStreamIndex(' + idx + ') ok');
-                        } else if (pm && player) {
-                            pm.setSubtitleStreamIndex(player, idx);
-                            console.log('[Legendaz] pm.setSubtitleStreamIndex(player,' + idx + ') ok');
-                        } else if (pm) {
-                            pm.setSubtitleStreamIndex(idx);
-                            console.log('[Legendaz] pm.setSubtitleStreamIndex(' + idx + ') ok');
-                        }
-                    } catch(e) { console.warn('[Legendaz] player erro:', e); }
-                }, 500);
             })
             .catch(function(e) { console.warn('[Legendaz] activateSubtitle:', e); });
     }
-
     function downloadSub(itemId, sub) {
         var container = document.getElementById('lgz-results');
         if (container) {
             container.innerHTML = '<p style="color:#888;font-size:.85rem;text-align:center;padding:20px">⬇️ Baixando legenda…</p>';
         }
-
         api('POST', 'Items/' + itemId + '/RemoteSearch/Subtitles/' + encodeURIComponent(sub.Id))
             .then(function() {
-                // Avisar o Jellyfin que o item tem conteúdo novo
                 return api('POST', 'Items/' + itemId + '/Refresh?MetadataRefreshMode=None&ImageRefreshMode=None&ReplaceAllMetadata=false&ReplaceAllImages=false');
             })
             .then(function() {
-                // Aguarda refresh propagar e tenta ativar automaticamente
                 return new Promise(function(resolve) { setTimeout(resolve, 1500); });
             })
             .then(function() {
@@ -297,19 +228,15 @@
                 console.error('[Legendaz] Erro no download:', err);
             });
     }
-
     function escHtml(str) {
         return String(str || '')
             .replace(/&/g,'&amp;').replace(/</g,'&lt;')
             .replace(/>/g,'&gt;').replace(/"/g,'&quot;');
     }
-
-    // ── Toast de notificação ──────────────────────────────────────────────────
     function showToast(msg, isError) {
         var id = 'lgz-toast';
         var old = document.getElementById(id);
         if (old) old.remove();
-
         var toast = document.createElement('div');
         toast.id = id;
         toast.style.cssText = [
@@ -327,31 +254,19 @@
         ].join(';');
         toast.textContent = msg;
         document.body.appendChild(toast);
-
         setTimeout(function() {
             toast.style.opacity = '0';
             setTimeout(function() { toast.remove(); }, 400);
         }, 3500);
     }
-
-    // ── Força o player a recarregar source e selecionar legenda ─────────────
     function reloadSubtitleList() {
-        // Nada — reload real é feito dentro de activateSubtitle
     }
-
-    // ── Injeção do botão no OSD do player ───────────────────────────────────
-    // Mesmo padrão do AutoPlay Toggle — ícone fixo na barra de controles.
-    // Posicionado logo após o botão de legendas (.btnSubtitles).
-
     function injectButton() {
         if (document.getElementById(BTN_ID)) return;
-
-        // Inserir após .btnSubtitles, antes de .btnAudio
         var ref = document.querySelector('.btnAudio') ||
                   document.querySelector('.btnVideoOsdSettings') ||
                   document.querySelector('.btnFullscreen');
         if (!ref) return;
-
         var btn = document.createElement('button');
         btn.id        = BTN_ID;
         btn.type      = 'button';
@@ -359,7 +274,6 @@
         btn.title     = 'Buscar Legendas';
         btn.style.cssText = 'vertical-align:middle;margin:0 2px;padding:0;background:none;border:none;cursor:pointer;color:inherit;';
         btn.innerHTML = '<span class="material-icons" style="font-size:22px">subtitles</span>';
-
         btn.addEventListener('click', function(e) {
             e.stopPropagation();
             if (document.getElementById(PANEL_ID)) { removePanel(); return; }
@@ -367,7 +281,7 @@
                 .then(function(results) {
                     _itemId = results[0].Id;
                     _lang   = results[1];
-                    _searchLang = results[1]; // idioma inicial
+                    _searchLang = results[1];
                     showPanel(_itemId, _lang);
                 })
                 .catch(function(err) {
@@ -375,12 +289,8 @@
                     showPanel('', (navigator.language || 'pt').split('-')[0]);
                 });
         });
-
         ref.parentNode.insertBefore(btn, ref);
-        console.log('[Legendaz] Botão injetado no OSD.');
     }
-
-    // ── Observers (mesmo padrão do AutoPlay Toggle) ───────────────────────────
     document.addEventListener('play', function(e) {
         if (!e.target || e.target.tagName !== 'VIDEO') return;
         var tries = 0;
@@ -389,22 +299,16 @@
             if (document.getElementById(BTN_ID) || ++tries > 30) clearInterval(retry);
         }, 100);
     }, true);
-
     var _t = null;
     document.addEventListener('mousemove', function() {
         clearTimeout(_t);
         _t = setTimeout(injectButton, 60);
     }, { passive: true });
-
     setInterval(injectButton, 4000);
-
-    // Fecha painel ao clicar fora
     document.addEventListener('click', function(e) {
         var panel = document.getElementById(PANEL_ID);
         if (panel && !panel.contains(e.target) && e.target.id !== BTN_ID) {
             removePanel();
         }
     });
-
-    console.log('[Legendaz] Script carregado.');
 }());
