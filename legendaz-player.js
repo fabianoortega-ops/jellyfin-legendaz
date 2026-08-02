@@ -201,14 +201,17 @@
                     return true;
                 }
                 console.log('[Legendaz] Fallback Sessions API, session=' + session.Id + ' idx=' + idx);
-                return api('POST', 'Sessions/' + session.Id + '/Playing', {
-                    PlayCommand:         'PlayNow',
+                var body = {
+                    PlayCommand:         0,
                     ItemIds:             [itemId],
                     StartPositionTicks:  posTicks,
                     SubtitleStreamIndex: idx,
-                    AudioStreamIndex:    audioIdx,
                     MediaSourceId:       mediaSrcId
-                }).then(function() { return true; });
+                };
+                if (audioIdx !== null && audioIdx !== undefined) body.AudioStreamIndex = audioIdx;
+                console.log('[Legendaz] Sessions Playing body:', JSON.stringify(body));
+                return api('POST', 'Sessions/' + session.Id + '/Playing', body)
+                    .then(function() { return true; });
             })
             .catch(function() { return false; });
     }
