@@ -140,11 +140,14 @@
     }
     function activateSubtitle(itemId, downloadedSub) {
         var pm = window.playbackManager;
-        var ms = 0;
-        try { ms = pm && typeof pm.currentTime === 'function' ? pm.currentTime() : 0; } catch(e) {}
-        var ticks = Math.floor(ms * 10000);
-        try { if (pm) pm.seek(ticks); } catch(e) {}
-        return new Promise(function(resolve) { setTimeout(resolve, 1000); })
+        return new Promise(function(resolve) { setTimeout(resolve, 3000); })
+            .then(function() {
+                var ms = 0;
+                try { ms = pm && typeof pm.currentTime === 'function' ? pm.currentTime() : 0; } catch(e) {}
+                var ticks = Math.floor(ms * 10000);
+                try { if (pm) pm.seek(ticks); } catch(e) {}
+                return new Promise(function(resolve) { setTimeout(resolve, 1500); });
+            })
             .then(function() {
                 return api('GET', 'Items/' + itemId + '?fields=MediaStreams');
             })
