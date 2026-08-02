@@ -180,52 +180,66 @@
 
     function activateSubtitle(itemId, beforeIndices) {
         console.log('[Legendaz] activateSubtitle start, beforeIndices:', beforeIndices);
-        return new Promise(function(r) { setTimeout(r, 3000); })
-            .then(function() {
-                return api('GET', 'Items/' + itemId + '?fields=MediaStreams');
-            })
-            .then(function(item) {
-                var subs = (item.MediaStreams || []).filter(function(s) { return s.Type === 'Subtitle'; });
-                console.log('[Legendaz] Streams after refresh:', subs.map(function(s) {
-                    return s.Index + '/' + s.Language + '/' + s.Codec + '/ext=' + s.IsExternal;
-                }));
 
-                var newSub = subs.find(function(s) { return beforeIndices.indexOf(s.Index) === -1; });
+        function getNewSub(attemptsLeft) {
+            return api('GET', 'Items/' + itemId + '?fields=MediaStreams')
+                .then(function(item) {
+                    var subs = (item.MediaStreams || []).filter(function(s) { return s.Type === 'Subtitle'; });
+                    console.log('[Legendaz] Poll (' + (11 - attemptsLeft) + '/10):', subs.map(function(s) {
+                        return s.Index + '/' + s.Language + '/ext=' + s.IsExternal;
+                    }));
+                    var found = subs.find(function(s) { return beforeIndices.indexOf(s.Index) === -1; });
+                    if (found) { return { sub: found, all: subs }; }
+                    if (attemptsLeft <= 1) { return { sub: null, all: subs }; }
+                    return new Promise(function(r) { setTimeout(r, 1500); })
+                        .then(function() { return getNewSub(attemptsLeft - 1); });
+                });
+        }
+
+        return new Promise(function(r) { setTimeout(r, 2000); })
+            .then(function() { return getNewSub(10); })
+            .then(function(result) {
+                var newSub = result.sub;
+                var allSubs = result.all;
+
                 if (!newSub) {
-                    console.log('[Legendaz] Nenhum índice novo — Bazarr sobrescreveu existente, buscando externa mais recente');
+                    console.log('[Legendaz] Nenhum índice novo após polling — fallback para externa existente');
                     var lang = (_searchLang || '').toLowerCase();
-                    newSub = subs.filter(function(s) {
+                    newSub = allSubs.filter(function(s) {
                         return s.IsExternal && langsMatch(lang, (s.Language || '').toLowerCase());
-                    }).pop() || subs.filter(function(s) { return s.IsExternal; }).pop();
+                    }).pop() || allSubs.filter(function(s) { return s.IsExternal; }).pop();
                     if (!newSub) {
-                        console.log('[Legendaz] Nenhuma legenda externa encontrada');
+                        console.log('[Legendaz] Sem legenda externa disponível');
                         return false;
                     }
-                    console.log('[Legendaz] Usando externa existente: idx=' + newSub.Index + ' lang=' + newSub.Language);
+                    console.log('[Legendaz] Fallback: idx=' + newSub.Index + ' lang=' + newSub.Language);
+                } else {
+                    console.log('[Legendaz] Nova legenda: idx=' + newSub.Index + ' lang=' + newSub.Language);
                 }
-                console.log('[Legendaz] Nova legenda: idx=' + newSub.Index + ' lang=' + newSub.Language + ' codec=' + newSub.Codec);
 
                 var pm = window.playbackManager;
                 var player = pm && pm._currentPlayer;
-                console.log('[Legendaz] pm:', !!pm, ' player:', !!player);
+                console.log('[Legendaz] pm:', !!pm, 'player:', !!player);
 
-                if (!pm || !player) return false;
+                if (!pm || !player) { return false; }
 
-                var embeddedSub = subs.find(function(s) { return !s.IsExternal && beforeIndices.indexOf(s.Index) !== -1; });
-                console.log('[Legendaz] Legenda embedded para trigger:', embeddedSub ? embeddedSub.Index : 'nenhuma');
+                var embeddedSub = allSubs.find(function(s) {
+                    return !s.IsExternal && beforeIndices.indexOf(s.Index) !== -1;
+                });
+                console.log('[Legendaz] Embedded para trigger:', embeddedSub ? embeddedSub.Index : 'nenhuma');
 
                 if (embeddedSub) {
-                    console.log('[Legendaz] Chamando setSubtitleStreamIndex(' + embeddedSub.Index + ', player) para forçar reload PlaybackInfo');
+                    console.log('[Legendaz] setSubtitleStreamIndex(' + embeddedSub.Index + ', player)');
                     pm.setSubtitleStreamIndex(embeddedSub.Index, player);
                     return new Promise(function(resolve) { setTimeout(resolve, 4000); })
                         .then(function() {
-                            console.log('[Legendaz] Ativando nova legenda: idx=' + newSub.Index);
+                            console.log('[Legendaz] Ativando nova: idx=' + newSub.Index);
                             pm.setSubtitleStreamIndex(newSub.Index, player);
                             return true;
                         });
                 }
 
-                console.log('[Legendaz] Sem embedded — ativando diretamente: idx=' + newSub.Index);
+                console.log('[Legendaz] Sem embedded — ativando direto: idx=' + newSub.Index);
                 pm.setSubtitleStreamIndex(newSub.Index, player);
                 return true;
             })
