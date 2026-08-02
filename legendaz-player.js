@@ -189,14 +189,20 @@
                         var session = sessions.find(function(s) {
                             return s.UserId === uid && s.NowPlayingItem;
                         }) || sessions.find(function(s) { return s.NowPlayingItem; });
-                        if (!session) { return; }
-                        api('POST', 'Sessions/' + session.Id + '/Command', {
-                            Name: 'SetSubtitleStreamIndex',
-                            ControllingUserId: uid,
-                            Arguments: { Index: String(idx) }
+                        if (!session) return;
+                        var sid = session.Id;
+                        var cmd = function(index) {
+                            return api('POST', 'Sessions/' + sid + '/Command', {
+                                Name: 'SetSubtitleStreamIndex',
+                                ControllingUserId: uid,
+                                Arguments: { Index: String(index) }
+                            });
+                        };
+                        cmd(-1).then(function() {
+                            return new Promise(function(r) { setTimeout(r, 800); });
                         }).then(function() {
-                        }).catch(function(e) {
-                        });
+                            return cmd(idx);
+                        }).catch(function() {});
                     })
                     .catch(function() {});
 
