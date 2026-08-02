@@ -157,16 +157,10 @@
         }
         return new Promise(function(resolve) { setTimeout(resolve, 3000); })
             .then(function() {
-                return Promise.all([
-                    api('GET', 'Items/' + itemId + '?fields=MediaStreams'),
-                    api('GET', 'Sessions?activeWithinSeconds=30')
-                ]);
+                return api('GET', 'Items/' + itemId + '?fields=MediaStreams');
             })
-            .then(function(results) {
-                var item     = results[0];
-                var sessions = results[1];
-                var streams  = (item.MediaStreams || []).filter(function(s) { return s.Type === 'Subtitle'; });
-                console.log('[Legendaz] Streams:', streams.map(function(s){return s.Index+'/'+s.Language+'/'+s.Codec+'/ext='+s.IsExternal;}));
+            .then(function(item) {
+                var streams = (item.MediaStreams || []).filter(function(s) { return s.Type === 'Subtitle'; });
                 if (!streams.length) return false;
                 var targetLang = (downloadedSub.Language || _searchLang || '').toLowerCase();
                 var targetFmt  = (downloadedSub.Format  || '').toLowerCase();
@@ -178,42 +172,62 @@
                     return (s.Codec || '').toLowerCase() === targetFmt;
                 }) || streams.filter(function(s) { return s.IsExternal; }).pop()
                   || streams[streams.length - 1];
-                console.log('[Legendaz] Escolhido: idx=' + newSub.Index + ' lang=' + newSub.Language + ' codec=' + newSub.Codec);
                 var idx = newSub.Index;
-                var uid = getUserId();
-                var session = sessions.find(function(s) {
-                    return s.UserId === uid && s.NowPlayingItem;
-                }) || sessions.find(function(s) { return s.NowPlayingItem; });
-                if (!session) return false;
-                var posTicks   = (session.PlayState && session.PlayState.PositionTicks) || 0;
-                var audioIdx   = session.PlayState && session.PlayState.AudioStreamIndex;
-                var mediaSrcId = (session.NowPlayingItem && session.NowPlayingItem.MediaSourceId) || itemId;
-                var pm = window.playbackManager;
-                console.log('[Legendaz] pm.play disponível:', !!(pm && pm.play));
-                if (pm && typeof pm.play === 'function') {
-                    pm.play({
-                        items:              [item],
-                        startPositionTicks: posTicks,
-                        audioStreamIndex:   audioIdx,
-                        subtitleStreamIndex: idx,
-                        mediaSourceId:      mediaSrcId
-                    });
-                    return true;
+                console.log('[Legendaz] Escolhido: idx=' + idx + ' lang=' + newSub.Language + ' codec=' + newSub.Codec);
+                var ccBtn = document.querySelector('.btnSubtitles');
+                if (!ccBtn) {
+                    console.log('[Legendaz] .btnSubtitles não encontrado');
+                    return false;
                 }
-                console.log('[Legendaz] Fallback Sessions API, session=' + session.Id + ' idx=' + idx);
-                var body = {
-                    PlayCommand:         0,
-                    ItemIds:             [itemId],
-                    StartPositionTicks:  posTicks,
-                    SubtitleStreamIndex: idx,
-                    MediaSourceId:       mediaSrcId
-                };
-                if (audioIdx !== null && audioIdx !== undefined) body.AudioStreamIndex = audioIdx;
-                console.log('[Legendaz] Sessions Playing body:', JSON.stringify(body));
-                return api('POST', 'Sessions/' + session.Id + '/Playing', body)
-                    .then(function() { return true; });
+                ccBtn.click();
+                console.log('[Legendaz] CC menu aberto');
+                return new Promise(function(resolve) { setTimeout(resolve, 800); })
+                    .then(function() {
+                        var sheets = document.querySelectorAll('.actionSheetContent');
+                        var sheet = null;
+                        var titles = ['legendas','subtitles','sous-titres','untertitel','subtítulos','sottotitoli','ondertitels','субтитры'];
+                        for (var i = 0; i < sheets.length; i++) {
+                            var t = sheets[i].querySelector('.actionSheetTitle');
+                            if (t && titles.indexOf(t.textContent.trim().toLowerCase()) !== -1) {
+                                sheet = sheets[i];
+                                break;
+                            }
+                        }
+                        if (!sheet) {
+                            console.log('[Legendaz] Menu legendas não encontrado após abrir CC');
+                            return false;
+                        }
+                        var buttons = sheet.querySelectorAll('button[data-index], .actionSheetScroller button');
+                        console.log('[Legendaz] Botões no menu:', buttons.length);
+                        var found = null;
+                        buttons.forEach(function(btn) {
+                            var dataIdx = btn.getAttribute('data-index');
+                            if (dataIdx !== null && parseInt(dataIdx) === idx) found = btn;
+                        });
+                        if (!found) {
+                            console.log('[Legendaz] Botão idx=' + idx + ' não encontrado, tentando por texto');
+                            buttons.forEach(function(btn) {
+                                var txt = btn.textContent.toLowerCase();
+                                if (txt.includes('pt-br') || txt.includes('portuguese') || txt.includes('portugu')) {
+                                    if (!found) found = btn;
+                                }
+                            });
+                        }
+                        if (found) {
+                            console.log('[Legendaz] Clicando em:', found.textContent.trim());
+                            found.click();
+                            return true;
+                        }
+                        var backdrop = document.querySelector('.dialogBackdrop');
+                        if (backdrop) backdrop.click();
+                        console.log('[Legendaz] Legenda não encontrada no menu');
+                        return false;
+                    });
             })
-            .catch(function() { return false; });
+            .catch(function(e) {
+                console.log('[Legendaz] activateSubtitle erro:', e);
+                return false;
+            });
     }
     function downloadSub(itemId, sub) {
         var container = document.getElementById('lgz-results');
