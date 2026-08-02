@@ -1,63 +1,94 @@
 (function () {
     'use strict';
-    var BTN_ID    = 'lgz-search-btn';
-    var PANEL_ID  = 'lgz-panel';
-    var _itemId   = null;
-    var _lang     = null;
+
+    var BTN_ID   = 'lgz-search-btn';
+    var PANEL_ID = 'lgz-panel';
+    var _itemId     = null;
+    var _lang       = null;
     var _searchLang = null;
+
     function getToken() {
         try {
             var ac = window.ApiClient;
-            return (typeof ac.accessToken === 'function' ? ac.accessToken() : ac.accessToken) || '';
+            if (!ac) return '';
+            return typeof ac.accessToken === 'function' ? ac.accessToken() : (ac.accessToken || ac._accessToken || '');
         } catch(e) { return ''; }
     }
+
     function getUserId() {
         try {
             var ac = window.ApiClient;
-            return (typeof ac.getCurrentUserId === 'function' ? ac.getCurrentUserId() : ac.currentUserId) || '';
+            if (!ac) return '';
+            return typeof ac.getCurrentUserId === 'function' ? ac.getCurrentUserId() : (ac.currentUserId || ac._currentUserId || '');
         } catch(e) { return ''; }
     }
+
     function api(method, path, body) {
         return fetch(window.location.origin + '/' + path, {
             method: method,
             headers: {
                 'Authorization': 'MediaBrowser Token="' + getToken() + '"',
-                'Content-Type':  'application/json'
+                'Content-Type': 'application/json'
             },
             body: body ? JSON.stringify(body) : undefined
         }).then(function(r) {
             if (!r.ok) throw new Error('HTTP ' + r.status);
-            if (r.status === 204 || r.headers.get('content-length') === '0') return null;
+            if (r.status === 204) return null;
             return r.json().catch(function() { return null; });
         });
     }
+
     function getCurrentItem() {
         return api('GET', 'Sessions?activeWithinSeconds=30')
             .then(function(sessions) {
-                var mine = sessions.find(function(s) {
-                    return s.DeviceId === (window.ApiClient.deviceId ? window.ApiClient.deviceId() : null);
-                }) || sessions.find(function(s) { return s.NowPlayingItem; });
-                if (!mine || !mine.NowPlayingItem) throw new Error('Nenhum item em reprodução.');
-                return mine.NowPlayingItem;
+                var uid = getUserId();
+                var s = (sessions || []).find(function(s) {
+                    return s.UserId === uid && s.NowPlayingItem;
+                }) || (sessions || []).find(function(s) { return s.NowPlayingItem; });
+                if (!s || !s.NowPlayingItem) throw new Error('Nenhum item em reprodução');
+                return s.NowPlayingItem;
             });
     }
+
     function getUserSubtitleLang() {
         var uid = getUserId();
         if (!uid) return Promise.resolve('pt');
         return api('GET', 'Users/' + uid)
-            .then(function(user) {
-                var pref = user.Configuration && user.Configuration.SubtitleLanguagePreference;
-                if (pref && pref.length > 0) return pref;
-                return (navigator.language || 'pt').split('-')[0];
+            .then(function(u) {
+                var p = u && u.Configuration && u.Configuration.SubtitleLanguagePreference;
+                return (p && p.length) ? p : (navigator.language || 'pt').split('-')[0];
             })
-            .catch(function() {
-                return (navigator.language || 'pt').split('-')[0];
-            });
+            .catch(function() { return (navigator.language || 'pt').split('-')[0]; });
     }
+
     function removePanel() {
         var p = document.getElementById(PANEL_ID);
         if (p) p.remove();
     }
+
+    function showToast(msg, isError) {
+        var id = 'lgz-toast';
+        var old = document.getElementById(id);
+        if (old) old.remove();
+        var t = document.createElement('div');
+        t.id = id;
+        t.style.cssText = [
+            'position:fixed', 'bottom:100px', 'left:50%', 'transform:translateX(-50%)',
+            'background:' + (isError ? '#8b0000' : '#1a3a1a'),
+            'border:1px solid ' + (isError ? '#f66' : '#4c4'),
+            'color:' + (isError ? '#f99' : '#8f8'),
+            'padding:12px 20px', 'border-radius:8px', 'font-size:.9rem', 'font-weight:600',
+            'z-index:2147483647', 'box-shadow:0 4px 16px rgba(0,0,0,.5)',
+            'pointer-events:none', 'transition:opacity .4s'
+        ].join(';');
+        t.textContent = msg;
+        document.body.appendChild(t);
+        setTimeout(function() {
+            t.style.opacity = '0';
+            setTimeout(function() { t.remove(); }, 400);
+        }, 3500);
+    }
+
     function showPanel(itemId, lang) {
         removePanel();
         var panel = document.createElement('div');
@@ -77,247 +108,166 @@
             '  <button id="lgz-close" style="background:none;border:none;color:#888;font-size:18px;cursor:pointer;line-height:1">✕</button>',
             '</div>',
             '<div style="padding:12px 16px;border-bottom:1px solid #333;display:flex;gap:8px">',
-            '  <input id="lgz-lang" value="' + lang + '" placeholder="Language (e.g. pt, en)"',
-            '    style="flex:1;background:#0d0d0d;border:1px solid #444;border-radius:6px;',
-            '           color:#e0e0e0;padding:7px 10px;font-size:.85rem">',
-            '  <button id="lgz-go"',
-            '    style="background:#00a4dc;color:#000;border:none;border-radius:6px;',
-            '           padding:7px 14px;font-weight:600;font-size:.85rem;cursor:pointer">',
-            '    Buscar',
-            '  </button>',
+            '  <input id="lgz-lang" value="' + escHtml(lang) + '" placeholder="Language (e.g. pt, en)"',
+            '    style="flex:1;background:#0d0d0d;border:1px solid #444;border-radius:6px;color:#e0e0e0;padding:7px 10px;font-size:.85rem">',
+            '  <button id="lgz-go" style="background:#00a4dc;color:#000;border:none;border-radius:6px;padding:7px 14px;font-weight:600;font-size:.85rem;cursor:pointer">Search</button>',
             '</div>',
             '<div id="lgz-results" style="flex:1;overflow-y:auto;padding:8px 0">',
-            '  <p style="color:#666;font-size:.85rem;text-align:center;padding:20px">',
-            '    Enter language and click Search.',
-            '  </p>',
+            '  <p style="color:#666;font-size:.85rem;text-align:center;padding:20px">Enter language and click Search.</p>',
             '</div>'
         ].join('');
         document.body.appendChild(panel);
         document.getElementById('lgz-close').addEventListener('click', removePanel);
         document.getElementById('lgz-go').addEventListener('click', function() {
-            var searchLang = document.getElementById('lgz-lang').value.trim() || lang;
-            _searchLang = searchLang;
-            doSearch(itemId, searchLang);
+            var sl = document.getElementById('lgz-lang').value.trim() || lang;
+            _searchLang = sl;
+            doSearch(itemId, sl);
         });
     }
+
     function renderResults(itemId, results) {
-        var container = document.getElementById('lgz-results');
-        if (!container) return;
-        if (!results || results.length === 0) {
-            container.innerHTML = '<p style="color:#666;font-size:.85rem;text-align:center;padding:20px">No subtitles found.</p>';
+        var c = document.getElementById('lgz-results');
+        if (!c) return;
+        if (!results || !results.length) {
+            c.innerHTML = '<p style="color:#666;font-size:.85rem;text-align:center;padding:20px">No subtitles found.</p>';
             return;
         }
-        container.innerHTML = '';
+        c.innerHTML = '';
         results.slice(0, 20).forEach(function(sub) {
             var row = document.createElement('div');
             row.style.cssText = 'padding:10px 16px;border-bottom:1px solid #222;cursor:pointer;transition:background .15s';
             row.innerHTML = [
-                '<div style="color:#e0e0e0;font-size:.85rem;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">',
-                    escHtml(sub.Name || sub.Id),
-                '</div>',
-                '<div style="color:#666;font-size:.75rem;margin-top:2px">',
+                '<div style="color:#e0e0e0;font-size:.85rem;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">' + escHtml(sub.Name || sub.Id) + '</div>',
+                '<div style="color:#666;font-size:.75rem;margin-top:2px">' +
                     escHtml(sub.ProviderName || '') + ' · ' + escHtml(sub.Format || '') +
-                    (sub.IsHearingImpaired ? ' · HI' : '') +
-                    (sub.IsForced ? ' · Forced' : ''),
+                    (sub.IsHearingImpaired ? ' · HI' : '') + (sub.IsForced ? ' · Forced' : '') +
                 '</div>'
             ].join('');
-            row.addEventListener('mouseover',  function() { row.style.background = '#252525'; });
-            row.addEventListener('mouseout',   function() { row.style.background = ''; });
-            row.addEventListener('click', function() {
-                _searchLang = document.getElementById('lgz-lang') ? document.getElementById('lgz-lang').value.trim() : _searchLang;
-                downloadSub(itemId, sub);
-            });
-            container.appendChild(row);
+            row.addEventListener('mouseover', function() { row.style.background = '#252525'; });
+            row.addEventListener('mouseout',  function() { row.style.background = ''; });
+            row.addEventListener('click', function() { downloadSub(itemId, sub); });
+            c.appendChild(row);
         });
     }
+
     function doSearch(itemId, lang) {
-        var container = document.getElementById('lgz-results');
-        if (!container) return;
-        container.innerHTML = '<p style="color:#888;font-size:.85rem;text-align:center;padding:20px">⏳ Searching… (may take a few minutes)</p>';
+        var c = document.getElementById('lgz-results');
+        if (c) c.innerHTML = '<p style="color:#888;font-size:.85rem;text-align:center;padding:20px">⏳ Searching… (may take a few minutes)</p>';
         api('GET', 'Items/' + itemId + '/RemoteSearch/Subtitles/' + encodeURIComponent(lang))
-            .then(function(results) { renderResults(itemId, results); })
-            .catch(function(err) {
-                if (!container) return;
-                container.innerHTML = '<p style="color:#f66;font-size:.85rem;text-align:center;padding:20px">Erro: ' + escHtml(err.message) + '</p>';
+            .then(function(r) { renderResults(itemId, r); })
+            .catch(function(e) {
+                var c2 = document.getElementById('lgz-results');
+                if (c2) c2.innerHTML = '<p style="color:#f66;font-size:.85rem;text-align:center;padding:20px">Error: ' + escHtml(e.message) + '</p>';
             });
     }
-    function activateSubtitle(itemId, downloadedSub) {
-        var langAliases = {
-            'pob': ['por', 'pt', 'pt-br'], 'por': ['pob', 'pt', 'pt-br'],
-            'pt':  ['pob', 'por', 'pt-br'], 'eng': ['en'],  'en':  ['eng'],
-            'spa': ['es'],  'es':  ['spa'],  'fra': ['fr'],  'fr':  ['fra'],
-            'deu': ['de', 'ger'], 'de': ['deu', 'ger'], 'ger': ['de', 'deu'],
-            'jpn': ['ja'],  'ja':  ['jpn'],  'kor': ['ko'],  'ko':  ['kor'],
-            'zho': ['zh', 'chi'], 'chi': ['zh', 'zho'],
-            'rus': ['ru'],  'ru':  ['rus'],  'ita': ['it'],  'it':  ['ita'],
-            'nld': ['nl'],  'nl':  ['nld'],  'pol': ['pl'],  'pl':  ['pol']
-        };
-        var SUBTITLE_TITLES = ['legendas','subtitles','sous-titres','untertitel','subtítulos','sottotitoli','ondertitels','субтитры'];
-        function langsMatch(a, b) {
-            if (!a || !b) return false;
-            a = a.toLowerCase(); b = b.toLowerCase();
-            if (a === b) return true;
-            return (langAliases[a] || []).indexOf(b) !== -1;
-        }
-        function wait(ms) { return new Promise(function(r) { setTimeout(r, ms); }); }
-        function findSheet() {
-            var sheets = document.querySelectorAll('.actionSheetContent');
-            for (var i = 0; i < sheets.length; i++) {
-                var t = sheets[i].querySelector('.actionSheetTitle');
-                if (t && SUBTITLE_TITLES.indexOf(t.textContent.trim().toLowerCase()) !== -1) return sheets[i];
-            }
-            return null;
-        }
-        function closeMenu() {
-            var backdrop = document.querySelector('.dialogBackdrop');
-            if (backdrop) backdrop.click();
-        }
-        function findNewSubBtn(targetLang, targetFmt) {
-            var sheet = findSheet();
-            if (!sheet) return null;
-            var buttons = Array.from(sheet.querySelectorAll('.actionSheetScroller button'));
-            console.log('[Legendaz] Botões no menu:', buttons.length, buttons.map(function(b){return b.textContent.trim();}));
-            return buttons.find(function(b) {
-                var txt = b.textContent.toLowerCase();
-                return txt.includes('externo') || txt.includes('external') ||
-                       (targetLang && (txt.includes('pt-br') || txt.includes('portuguese') ||
-                        txt.includes('portugu') || txt.includes(targetLang)));
-            }) || null;
-        }
-        var targetLang = '';
-        var targetFmt  = '';
-        var ccBtn = document.querySelector('.btnSubtitles');
-        if (!ccBtn) return Promise.resolve(false);
-        return wait(5000)
+
+    var LANG_ALIASES = {
+        'pob': ['por','pt','pt-br'], 'por': ['pob','pt','pt-br'], 'pt': ['pob','por','pt-br'],
+        'eng': ['en'], 'en': ['eng'], 'spa': ['es'], 'es': ['spa'],
+        'fra': ['fr'], 'fr': ['fra'], 'deu': ['de','ger'], 'de': ['deu','ger'], 'ger': ['de','deu'],
+        'jpn': ['ja'], 'ja': ['jpn'], 'kor': ['ko'], 'ko': ['kor'],
+        'zho': ['zh','chi'], 'chi': ['zh','zho'], 'rus': ['ru'], 'ru': ['rus'],
+        'ita': ['it'], 'it': ['ita'], 'nld': ['nl'], 'nl': ['nld'],
+        'pol': ['pl'], 'pl': ['pol']
+    };
+
+    function langsMatch(a, b) {
+        if (!a || !b) return false;
+        a = a.toLowerCase(); b = b.toLowerCase();
+        if (a === b) return true;
+        return (LANG_ALIASES[a] || []).indexOf(b) !== -1;
+    }
+
+    function activateSubtitle(itemId, beforeIndices) {
+        console.log('[Legendaz] activateSubtitle start, beforeIndices:', beforeIndices);
+        return new Promise(function(r) { setTimeout(r, 3000); })
             .then(function() {
                 return api('GET', 'Items/' + itemId + '?fields=MediaStreams');
             })
             .then(function(item) {
-                var streams = (item.MediaStreams || []).filter(function(s) { return s.Type === 'Subtitle'; });
-                if (!streams.length) return false;
-                var newSub = streams.find(function(s) {
-                    return langsMatch(downloadedSub.Language || _searchLang || '', s.Language) &&
-                           (s.Codec || '').toLowerCase() === (downloadedSub.Format || '').toLowerCase();
-                }) || streams.find(function(s) {
-                    return langsMatch(downloadedSub.Language || _searchLang || '', s.Language);
-                }) || streams.filter(function(s) { return s.IsExternal; }).pop()
-                  || streams[streams.length - 1];
-                targetLang = (newSub.Language || '').toLowerCase();
-                targetFmt  = (newSub.Codec || '').toLowerCase();
-                console.log('[Legendaz] Alvo: lang=' + targetLang + ' codec=' + targetFmt);
-                ccBtn.click();
-                return wait(800);
-            })
-            .then(function(v) {
-                if (v === false) return false;
-                var found = findNewSubBtn(targetLang, targetFmt);
-                if (found) {
-                    console.log('[Legendaz] Legenda encontrada na 1a abertura:', found.textContent.trim());
-                    found.click();
-                    return true;
+                var subs = (item.MediaStreams || []).filter(function(s) { return s.Type === 'Subtitle'; });
+                console.log('[Legendaz] Streams after refresh:', subs.map(function(s) {
+                    return s.Index + '/' + s.Language + '/' + s.Codec + '/ext=' + s.IsExternal;
+                }));
+
+                var newSub = subs.find(function(s) { return beforeIndices.indexOf(s.Index) === -1; });
+                if (!newSub) {
+                    console.log('[Legendaz] Nenhuma nova stream detectada');
+                    return false;
                 }
-                console.log('[Legendaz] Não encontrado na 1a abertura, enviando trigger suave');
-                closeMenu();
-                return api('GET', 'Sessions?activeWithinSeconds=30')
-                    .then(function(sessions) {
-                        var uid = getUserId();
-                        var session = sessions.find(function(s) {
-                            return s.UserId === uid && s.NowPlayingItem;
-                        }) || sessions.find(function(s) { return s.NowPlayingItem; });
-                        if (!session) return wait(3000);
-                        return api('POST', 'Sessions/' + session.Id + '/Command', {
-                            Name: 'SetSubtitleStreamIndex',
-                            ControllingUserId: uid,
-                            Arguments: { Index: '-1' }
-                        }).then(function() { return wait(3000); });
-                    })
-                    .catch(function() { return wait(3000); });
-            })
-            .then(function(v) {
-                if (v === true || v === false) return v;
-                ccBtn.click();
-                console.log('[Legendaz] CC menu aberto 2a vez');
-                return wait(800);
-            })
-            .then(function(v) {
-                if (v === true || v === false) return v;
-                var found = findNewSubBtn(targetLang, targetFmt);
-                if (found) {
-                    console.log('[Legendaz] Legenda encontrada na 2a abertura:', found.textContent.trim());
-                    found.click();
-                    return true;
+                console.log('[Legendaz] Nova legenda: idx=' + newSub.Index + ' lang=' + newSub.Language + ' codec=' + newSub.Codec);
+
+                var pm = window.playbackManager;
+                var player = pm && pm._currentPlayer;
+                console.log('[Legendaz] pm:', !!pm, ' player:', !!player);
+
+                if (!pm || !player) return false;
+
+                var embeddedSub = subs.find(function(s) { return !s.IsExternal && beforeIndices.indexOf(s.Index) !== -1; });
+                console.log('[Legendaz] Legenda embedded para trigger:', embeddedSub ? embeddedSub.Index : 'nenhuma');
+
+                if (embeddedSub) {
+                    console.log('[Legendaz] Chamando setSubtitleStreamIndex(' + embeddedSub.Index + ', player) para forçar reload PlaybackInfo');
+                    pm.setSubtitleStreamIndex(embeddedSub.Index, player);
+                    return new Promise(function(resolve) { setTimeout(resolve, 4000); })
+                        .then(function() {
+                            console.log('[Legendaz] Ativando nova legenda: idx=' + newSub.Index);
+                            pm.setSubtitleStreamIndex(newSub.Index, player);
+                            return true;
+                        });
                 }
-                closeMenu();
-                console.log('[Legendaz] Legenda não apareceu no menu');
-                return false;
+
+                console.log('[Legendaz] Sem embedded — ativando diretamente: idx=' + newSub.Index);
+                pm.setSubtitleStreamIndex(newSub.Index, player);
+                return true;
             })
             .catch(function(e) {
                 console.log('[Legendaz] activateSubtitle erro:', e);
                 return false;
             });
     }
+
     function downloadSub(itemId, sub) {
-        var container = document.getElementById('lgz-results');
-        if (container) {
-            container.innerHTML = '<p style="color:#888;font-size:.85rem;text-align:center;padding:20px">⬇️ Downloading subtitle…</p>';
-        }
-        console.log('[Legendaz] Iniciando download:', sub.Id, sub.Name);
-        api('POST', 'Items/' + itemId + '/RemoteSearch/Subtitles/' + encodeURIComponent(sub.Id))
+        var c = document.getElementById('lgz-results');
+        if (c) c.innerHTML = '<p style="color:#888;font-size:.85rem;text-align:center;padding:20px">⬇️ Downloading subtitle…</p>';
+
+        var beforeIndices = [];
+        api('GET', 'Items/' + itemId + '?fields=MediaStreams')
+            .then(function(item) {
+                beforeIndices = (item.MediaStreams || [])
+                    .filter(function(s) { return s.Type === 'Subtitle'; })
+                    .map(function(s) { return s.Index; });
+                console.log('[Legendaz] Índices antes do download:', beforeIndices);
+                return api('POST', 'Items/' + itemId + '/RemoteSearch/Subtitles/' + encodeURIComponent(sub.Id));
+            })
             .then(function() {
                 return api('POST', 'Items/' + itemId + '/Refresh?MetadataRefreshMode=None&ImageRefreshMode=None&ReplaceAllMetadata=false&ReplaceAllImages=false');
             })
             .then(function() {
-                console.log('[Legendaz] Download OK.');
                 removePanel();
-                showToast('✅ ' + escHtml(sub.Name || 'Legenda') + ' baixada!');
-                activateSubtitle(itemId, sub)
-                    .then(function(activated) {
-                        if (activated) {
-                            showToast('▶ Legenda ativada!');
+                showToast('✅ ' + escHtml(sub.Name || 'Legenda') + ' downloaded!');
+                activateSubtitle(itemId, beforeIndices)
+                    .then(function(ok) {
+                        if (ok) {
+                            showToast('▶ Subtitle activated!');
                         } else {
-                            showToast('❌ Não foi possível ativar a legenda.', true);
+                            showToast('⚠ Could not activate automatically. Select it in the CC menu.', true);
                         }
                     })
-                    .catch(function(err) {
-                        showToast('❌ Erro ao ativar: ' + escHtml(err.message || ''), true);
+                    .catch(function(e) {
+                        showToast('❌ Activation error: ' + escHtml(e.message || ''), true);
                     });
             })
             .catch(function(err) {
                 removePanel();
-                showToast('❌ Erro ao baixar: ' + escHtml(err.message || ''), true);
+                showToast('❌ Download error: ' + escHtml(err.message || ''), true);
             });
     }
-    function escHtml(str) {
-        return String(str || '')
-            .replace(/&/g,'&amp;').replace(/</g,'&lt;')
-            .replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+
+    function escHtml(s) {
+        return String(s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
     }
-    function showToast(msg, isError) {
-        var id = 'lgz-toast';
-        var old = document.getElementById(id);
-        if (old) old.remove();
-        var toast = document.createElement('div');
-        toast.id = id;
-        toast.style.cssText = [
-            'position:fixed', 'bottom:100px', 'left:50%',
-            'transform:translateX(-50%)',
-            'background:' + (isError ? '#8b0000' : '#1a3a1a'),
-            'border:1px solid ' + (isError ? '#f66' : '#4c4'),
-            'color:' + (isError ? '#f99' : '#8f8'),
-            'padding:12px 20px', 'border-radius:8px',
-            'font-size:.9rem', 'font-weight:600',
-            'z-index:2147483647',
-            'box-shadow:0 4px 16px rgba(0,0,0,.5)',
-            'pointer-events:none',
-            'transition:opacity .4s'
-        ].join(';');
-        toast.textContent = msg;
-        document.body.appendChild(toast);
-        setTimeout(function() {
-            toast.style.opacity = '0';
-            setTimeout(function() { toast.remove(); }, 400);
-        }, 3500);
-    }
+
     function injectButton() {
         if (document.getElementById(BTN_ID)) return;
         var ref = document.querySelector('.btnAudio') ||
@@ -325,29 +275,30 @@
                   document.querySelector('.btnFullscreen');
         if (!ref) return;
         var btn = document.createElement('button');
-        btn.id        = BTN_ID;
-        btn.type      = 'button';
+        btn.id = BTN_ID;
+        btn.type = 'button';
         btn.className = 'paper-icon-button-light';
-        btn.title     = 'Buscar Legendas';
+        btn.title = 'Search Subtitles';
         btn.style.cssText = 'vertical-align:middle;margin:0 2px;padding:0;background:none;border:none;cursor:pointer;color:inherit;';
         btn.innerHTML = '<span class="material-icons" style="font-size:22px">subtitles</span>';
         btn.addEventListener('click', function(e) {
             e.stopPropagation();
             if (document.getElementById(PANEL_ID)) { removePanel(); return; }
             Promise.all([getCurrentItem(), getUserSubtitleLang()])
-                .then(function(results) {
-                    _itemId = results[0].Id;
-                    _lang   = results[1];
-                    _searchLang = results[1];
+                .then(function(r) {
+                    _itemId = r[0].Id;
+                    _lang   = r[1];
+                    _searchLang = _lang;
                     showPanel(_itemId, _lang);
                 })
-                .catch(function(err) {
+                .catch(function() {
                     showPanel('', (navigator.language || 'pt').split('-')[0]);
                 });
         });
         ref.parentNode.insertBefore(btn, ref);
         console.log('[Legendaz] Botão injetado.');
     }
+
     document.addEventListener('play', function(e) {
         if (!e.target || e.target.tagName !== 'VIDEO') return;
         var tries = 0;
@@ -356,17 +307,19 @@
             if (document.getElementById(BTN_ID) || ++tries > 30) clearInterval(retry);
         }, 100);
     }, true);
+
     var _t = null;
     document.addEventListener('mousemove', function() {
         clearTimeout(_t);
         _t = setTimeout(injectButton, 60);
     }, { passive: true });
+
     setInterval(injectButton, 4000);
+
     document.addEventListener('click', function(e) {
-        var panel = document.getElementById(PANEL_ID);
-        if (panel && !panel.contains(e.target) && e.target.id !== BTN_ID) {
-            removePanel();
-        }
+        var p = document.getElementById(PANEL_ID);
+        if (p && !p.contains(e.target) && e.target.id !== BTN_ID) removePanel();
     });
+
     console.log('[Legendaz] Script carregado.');
 }());
