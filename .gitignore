@@ -6,3 +6,5 @@ obj/
 *.nupkg
 .DS_Store
 Thumbs.db
+
+build-release.ps1
