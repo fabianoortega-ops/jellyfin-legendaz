@@ -7,3 +7,4 @@ namespace JellyfinLegendaz
         // Expansível no futuro: idioma padrão, provedor preferido, etc.
     }
 }
+

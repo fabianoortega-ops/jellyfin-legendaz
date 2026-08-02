@@ -149,3 +149,4 @@ Feito com ♥ para a comunidade [Jellyfin](https://jellyfin.org)
 [MIT License](../LICENSE) · [Site](https://fabianoortega-ops.github.io/jellyfin-legendaz) · [Releases](https://github.com/fabianoortega-ops/jellyfin-legendaz/releases)
 
 </div>
+

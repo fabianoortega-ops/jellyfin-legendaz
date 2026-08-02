@@ -323,3 +323,4 @@
 
     console.log('[Legendaz] Script carregado.');
 }());
+
