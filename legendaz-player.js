@@ -192,8 +192,16 @@
 
                 var newSub = subs.find(function(s) { return beforeIndices.indexOf(s.Index) === -1; });
                 if (!newSub) {
-                    console.log('[Legendaz] Nenhuma nova stream detectada');
-                    return false;
+                    console.log('[Legendaz] Nenhum índice novo — Bazarr sobrescreveu existente, buscando externa mais recente');
+                    var lang = (_searchLang || '').toLowerCase();
+                    newSub = subs.filter(function(s) {
+                        return s.IsExternal && langsMatch(lang, (s.Language || '').toLowerCase());
+                    }).pop() || subs.filter(function(s) { return s.IsExternal; }).pop();
+                    if (!newSub) {
+                        console.log('[Legendaz] Nenhuma legenda externa encontrada');
+                        return false;
+                    }
+                    console.log('[Legendaz] Usando externa existente: idx=' + newSub.Index + ' lang=' + newSub.Language);
                 }
                 console.log('[Legendaz] Nova legenda: idx=' + newSub.Index + ' lang=' + newSub.Language + ' codec=' + newSub.Codec);
 
@@ -323,4 +331,3 @@
 
     console.log('[Legendaz] Script carregado.');
 }());
-
