@@ -8,12 +8,12 @@
   "imageUrl": "https://fabianoortega-ops.github.io/jellyfin-legendaz/logo.svg",
   "versions": [
     {
-      "version": "0.1.8.7",
-      "changelog": "## 0.1.8.7",
+      "version": "0.1.8.8",
+      "changelog": "## 0.1.8.8",
       "targetAbi": "10.11.0.0",
-      "sourceUrl": "https://github.com/fabianoortega-ops/jellyfin-legendaz/releases/download/v0.1.8.7/JellyfinLegendaz_0.1.8.7.zip",
-      "checksum": "4da7d722932d3aadf7b7067db2d7027f",
-      "timestamp": "2026-08-02T22:17:46Z"
+      "sourceUrl": "https://github.com/fabianoortega-ops/jellyfin-legendaz/releases/download/v0.1.8.8/JellyfinLegendaz_0.1.8.8.zip",
+      "checksum": "e816fe5fc39eed10e1b792befbab2595",
+      "timestamp": "2026-08-02T22:30:38Z"
     }
   ]
 }]
