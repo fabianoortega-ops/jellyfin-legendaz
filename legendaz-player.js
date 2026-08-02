@@ -139,39 +139,34 @@
             });
     }
     function activateSubtitle(itemId, downloadedSub) {
-        var pm = window.playbackManager;
+        var langAliases = {
+            'pob': ['por', 'pt', 'pt-br'], 'por': ['pob', 'pt', 'pt-br'],
+            'pt':  ['pob', 'por', 'pt-br'], 'eng': ['en'],  'en':  ['eng'],
+            'spa': ['es'],  'es':  ['spa'],  'fra': ['fr'],  'fr':  ['fra'],
+            'deu': ['de', 'ger'], 'de': ['deu', 'ger'], 'ger': ['de', 'deu'],
+            'jpn': ['ja'],  'ja':  ['jpn'],  'kor': ['ko'],  'ko':  ['kor'],
+            'zho': ['zh', 'chi'], 'chi': ['zh', 'zho'],
+            'rus': ['ru'],  'ru':  ['rus'],  'ita': ['it'],  'it':  ['ita'],
+            'nld': ['nl'],  'nl':  ['nld'],  'pol': ['pl'],  'pl':  ['pol']
+        };
+        function langsMatch(a, b) {
+            if (!a || !b) return false;
+            a = a.toLowerCase(); b = b.toLowerCase();
+            if (a === b) return true;
+            return (langAliases[a] || []).indexOf(b) !== -1;
+        }
         return new Promise(function(resolve) { setTimeout(resolve, 3000); })
             .then(function() {
-                var ms = 0;
-                try { ms = pm && typeof pm.currentTime === 'function' ? pm.currentTime() : 0; } catch(e) {}
-                var ticks = Math.floor(ms * 10000);
-                try { if (pm) pm.seek(ticks); } catch(e) {}
-                return new Promise(function(resolve) { setTimeout(resolve, 1500); });
+                return Promise.all([
+                    api('GET', 'Items/' + itemId + '?fields=MediaStreams'),
+                    api('GET', 'Sessions?activeWithinSeconds=30')
+                ]);
             })
-            .then(function() {
-                return api('GET', 'Items/' + itemId + '?fields=MediaStreams');
-            })
-            .then(function(item) {
-                var streams = (item.MediaStreams || []).filter(function(s) {
-                    return s.Type === 'Subtitle';
-                });
+            .then(function(results) {
+                var item     = results[0];
+                var sessions = results[1];
+                var streams  = (item.MediaStreams || []).filter(function(s) { return s.Type === 'Subtitle'; });
                 if (!streams.length) return;
-                var langAliases = {
-                    'pob': ['por', 'pt', 'pt-br'], 'por': ['pob', 'pt', 'pt-br'],
-                    'pt':  ['pob', 'por', 'pt-br'], 'eng': ['en'],  'en':  ['eng'],
-                    'spa': ['es'],  'es':  ['spa'],  'fra': ['fr'],  'fr':  ['fra'],
-                    'deu': ['de', 'ger'], 'de': ['deu', 'ger'], 'ger': ['de', 'deu'],
-                    'jpn': ['ja'],  'ja':  ['jpn'],  'kor': ['ko'],  'ko':  ['kor'],
-                    'zho': ['zh', 'chi'], 'chi': ['zh', 'zho'],
-                    'rus': ['ru'],  'ru':  ['rus'],  'ita': ['it'],  'it':  ['ita'],
-                    'nld': ['nl'],  'nl':  ['nld'],  'pol': ['pl'],  'pl':  ['pol']
-                };
-                function langsMatch(a, b) {
-                    if (!a || !b) return false;
-                    a = a.toLowerCase(); b = b.toLowerCase();
-                    if (a === b) return true;
-                    return (langAliases[a] || []).indexOf(b) !== -1;
-                }
                 var targetLang = (downloadedSub.Language || _searchLang || '').toLowerCase();
                 var targetFmt  = (downloadedSub.Format  || '').toLowerCase();
                 var newSub = streams.find(function(s) {
@@ -183,31 +178,24 @@
                 }) || streams.filter(function(s) { return s.IsExternal; }).pop()
                   || streams[streams.length - 1];
                 var idx = newSub.Index;
-                api('GET', 'Sessions?activeWithinSeconds=30')
-                    .then(function(sessions) {
-                        var uid = getUserId();
-                        var session = sessions.find(function(s) {
-                            return s.UserId === uid && s.NowPlayingItem;
-                        }) || sessions.find(function(s) { return s.NowPlayingItem; });
-                        if (!session) return;
-                        var sid = session.Id;
-                        var cmd = function(index) {
-                            return api('POST', 'Sessions/' + sid + '/Command', {
-                                Name: 'SetSubtitleStreamIndex',
-                                ControllingUserId: uid,
-                                Arguments: { Index: String(index) }
-                            });
-                        };
-                        cmd(-1).then(function() {
-                            return new Promise(function(r) { setTimeout(r, 800); });
-                        }).then(function() {
-                            return cmd(idx);
-                        }).catch(function() {});
-                    })
-                    .catch(function() {});
-
+                var uid = getUserId();
+                var session = sessions.find(function(s) {
+                    return s.UserId === uid && s.NowPlayingItem;
+                }) || sessions.find(function(s) { return s.NowPlayingItem; });
+                if (!session) return;
+                var posTicks   = (session.PlayState && session.PlayState.PositionTicks) || 0;
+                var audioIdx   = session.PlayState && session.PlayState.AudioStreamIndex;
+                var mediaSrcId = (session.NowPlayingItem && session.NowPlayingItem.MediaSourceId) || itemId;
+                return api('POST', 'Sessions/' + session.Id + '/Playing', {
+                    PlayCommand:         'PlayNow',
+                    ItemIds:             [itemId],
+                    StartPositionTicks:  posTicks,
+                    SubtitleStreamIndex: idx,
+                    AudioStreamIndex:    audioIdx,
+                    MediaSourceId:       mediaSrcId
+                });
             })
-            .catch(function(e) { });
+            .catch(function() {});
     }
     function downloadSub(itemId, sub) {
         var container = document.getElementById('lgz-results');
@@ -226,7 +214,7 @@
             })
             .then(function() {
                 removePanel();
-                showToast('✅ ' + escHtml(sub.Name || 'Legenda') + ' baixada!');
+                showToast('✅ ' + escHtml(sub.Name || 'Legenda') + ' baixada e ativada!');
             })
             .catch(function(err) {
                 removePanel();
