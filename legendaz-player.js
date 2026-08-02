@@ -77,7 +77,7 @@
             '  <button id="lgz-close" style="background:none;border:none;color:#888;font-size:18px;cursor:pointer;line-height:1">✕</button>',
             '</div>',
             '<div style="padding:12px 16px;border-bottom:1px solid #333;display:flex;gap:8px">',
-            '  <input id="lgz-lang" value="' + lang + '" placeholder="Idioma (ex: pt, en)"',
+            '  <input id="lgz-lang" value="' + lang + '" placeholder="Language (e.g. pt, en)"',
             '    style="flex:1;background:#0d0d0d;border:1px solid #444;border-radius:6px;',
             '           color:#e0e0e0;padding:7px 10px;font-size:.85rem">',
             '  <button id="lgz-go"',
@@ -88,7 +88,7 @@
             '</div>',
             '<div id="lgz-results" style="flex:1;overflow-y:auto;padding:8px 0">',
             '  <p style="color:#666;font-size:.85rem;text-align:center;padding:20px">',
-            '    Digite o idioma e clique em Buscar.',
+            '    Enter language and click Search.',
             '  </p>',
             '</div>'
         ].join('');
@@ -104,7 +104,7 @@
         var container = document.getElementById('lgz-results');
         if (!container) return;
         if (!results || results.length === 0) {
-            container.innerHTML = '<p style="color:#666;font-size:.85rem;text-align:center;padding:20px">Nenhuma legenda encontrada.</p>';
+            container.innerHTML = '<p style="color:#666;font-size:.85rem;text-align:center;padding:20px">No subtitles found.</p>';
             return;
         }
         container.innerHTML = '';
@@ -130,7 +130,7 @@
     function doSearch(itemId, lang) {
         var container = document.getElementById('lgz-results');
         if (!container) return;
-        container.innerHTML = '<p style="color:#888;font-size:.85rem;text-align:center;padding:20px">⏳ Buscando… (pode levar alguns minutos)</p>';
+        container.innerHTML = '<p style="color:#888;font-size:.85rem;text-align:center;padding:20px">⏳ Searching… (may take a few minutes)</p>';
         api('GET', 'Items/' + itemId + '/RemoteSearch/Subtitles/' + encodeURIComponent(lang))
             .then(function(results) { renderResults(itemId, results); })
             .catch(function(err) {
@@ -144,7 +144,7 @@
         try { ms = pm && typeof pm.currentTime === 'function' ? pm.currentTime() : 0; } catch(e) {}
         var ticks = Math.floor(ms * 10000);
         try { if (pm) pm.seek(ticks); } catch(e) {}
-        return new Promise(function(resolve) { setTimeout(resolve, 2500); })
+        return new Promise(function(resolve) { setTimeout(resolve, 1000); })
             .then(function() {
                 return api('GET', 'Items/' + itemId + '?fields=MediaStreams');
             })
@@ -171,8 +171,6 @@
                 }
                 var targetLang = (downloadedSub.Language || _searchLang || '').toLowerCase();
                 var targetFmt  = (downloadedSub.Format  || '').toLowerCase();
-                streams.forEach(function(s) {
-                });
                 var newSub = streams.find(function(s) {
                     return langsMatch(targetLang, s.Language) && (s.Codec || '').toLowerCase() === targetFmt;
                 }) || streams.find(function(s) {
@@ -188,25 +186,24 @@
                         var session = sessions.find(function(s) {
                             return s.UserId === uid && s.NowPlayingItem;
                         }) || sessions.find(function(s) { return s.NowPlayingItem; });
-                        if (!session) { console.warn('[Legendaz] session não encontrada'); return; }
+                        if (!session) { return; }
                         api('POST', 'Sessions/' + session.Id + '/Command', {
                             Name: 'SetSubtitleStreamIndex',
                             ControllingUserId: uid,
                             Arguments: { Index: String(idx) }
                         }).then(function() {
                         }).catch(function(e) {
-                            console.warn('[Legendaz] Sessions API erro:', e);
                         });
                     })
                     .catch(function() {});
 
             })
-            .catch(function(e) { console.warn('[Legendaz] activateSubtitle:', e); });
+            .catch(function(e) { });
     }
     function downloadSub(itemId, sub) {
         var container = document.getElementById('lgz-results');
         if (container) {
-            container.innerHTML = '<p style="color:#888;font-size:.85rem;text-align:center;padding:20px">⬇️ Baixando legenda…</p>';
+            container.innerHTML = '<p style="color:#888;font-size:.85rem;text-align:center;padding:20px">⬇️ Downloading subtitle…</p>';
         }
         api('POST', 'Items/' + itemId + '/RemoteSearch/Subtitles/' + encodeURIComponent(sub.Id))
             .then(function() {
@@ -225,7 +222,6 @@
             .catch(function(err) {
                 removePanel();
                 showToast('❌ Erro: ' + err.message, true);
-                console.error('[Legendaz] Erro no download:', err);
             });
     }
     function escHtml(str) {
@@ -259,8 +255,6 @@
             setTimeout(function() { toast.remove(); }, 400);
         }, 3500);
     }
-    function reloadSubtitleList() {
-    }
     function injectButton() {
         if (document.getElementById(BTN_ID)) return;
         var ref = document.querySelector('.btnAudio') ||
@@ -285,7 +279,6 @@
                     showPanel(_itemId, _lang);
                 })
                 .catch(function(err) {
-                    console.error('[Legendaz] Erro ao obter item/idioma:', err);
                     showPanel('', (navigator.language || 'pt').split('-')[0]);
                 });
         });
