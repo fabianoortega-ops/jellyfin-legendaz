@@ -166,7 +166,8 @@
                 var item     = results[0];
                 var sessions = results[1];
                 var streams  = (item.MediaStreams || []).filter(function(s) { return s.Type === 'Subtitle'; });
-                if (!streams.length) return;
+                console.log('[Legendaz] Streams:', streams.map(function(s){return s.Index+'/'+s.Language+'/'+s.Codec+'/ext='+s.IsExternal;}));
+                if (!streams.length) return false;
                 var targetLang = (downloadedSub.Language || _searchLang || '').toLowerCase();
                 var targetFmt  = (downloadedSub.Format  || '').toLowerCase();
                 var newSub = streams.find(function(s) {
@@ -177,15 +178,29 @@
                     return (s.Codec || '').toLowerCase() === targetFmt;
                 }) || streams.filter(function(s) { return s.IsExternal; }).pop()
                   || streams[streams.length - 1];
+                console.log('[Legendaz] Escolhido: idx=' + newSub.Index + ' lang=' + newSub.Language + ' codec=' + newSub.Codec);
                 var idx = newSub.Index;
                 var uid = getUserId();
                 var session = sessions.find(function(s) {
                     return s.UserId === uid && s.NowPlayingItem;
                 }) || sessions.find(function(s) { return s.NowPlayingItem; });
-                if (!session) return;
+                if (!session) return false;
                 var posTicks   = (session.PlayState && session.PlayState.PositionTicks) || 0;
                 var audioIdx   = session.PlayState && session.PlayState.AudioStreamIndex;
                 var mediaSrcId = (session.NowPlayingItem && session.NowPlayingItem.MediaSourceId) || itemId;
+                var pm = window.playbackManager;
+                console.log('[Legendaz] pm.play disponível:', !!(pm && pm.play));
+                if (pm && typeof pm.play === 'function') {
+                    pm.play({
+                        items:              [item],
+                        startPositionTicks: posTicks,
+                        audioStreamIndex:   audioIdx,
+                        subtitleStreamIndex: idx,
+                        mediaSourceId:      mediaSrcId
+                    });
+                    return true;
+                }
+                console.log('[Legendaz] Fallback Sessions API, session=' + session.Id + ' idx=' + idx);
                 return api('POST', 'Sessions/' + session.Id + '/Playing', {
                     PlayCommand:         'PlayNow',
                     ItemIds:             [itemId],
@@ -193,32 +208,39 @@
                     SubtitleStreamIndex: idx,
                     AudioStreamIndex:    audioIdx,
                     MediaSourceId:       mediaSrcId
-                });
+                }).then(function() { return true; });
             })
-            .catch(function() {});
+            .catch(function() { return false; });
     }
     function downloadSub(itemId, sub) {
         var container = document.getElementById('lgz-results');
         if (container) {
             container.innerHTML = '<p style="color:#888;font-size:.85rem;text-align:center;padding:20px">⬇️ Downloading subtitle…</p>';
         }
+        console.log('[Legendaz] Iniciando download:', sub.Id, sub.Name);
         api('POST', 'Items/' + itemId + '/RemoteSearch/Subtitles/' + encodeURIComponent(sub.Id))
             .then(function() {
                 return api('POST', 'Items/' + itemId + '/Refresh?MetadataRefreshMode=None&ImageRefreshMode=None&ReplaceAllMetadata=false&ReplaceAllImages=false');
             })
             .then(function() {
-                return new Promise(function(resolve) { setTimeout(resolve, 1500); });
-            })
-            .then(function() {
-                return activateSubtitle(itemId, sub);
-            })
-            .then(function() {
+                console.log('[Legendaz] Download OK.');
                 removePanel();
-                showToast('✅ ' + escHtml(sub.Name || 'Legenda') + ' baixada e ativada!');
+                showToast('✅ ' + escHtml(sub.Name || 'Legenda') + ' baixada!');
+                activateSubtitle(itemId, sub)
+                    .then(function(activated) {
+                        if (activated) {
+                            showToast('▶ Legenda ativada!');
+                        } else {
+                            showToast('❌ Não foi possível ativar a legenda.', true);
+                        }
+                    })
+                    .catch(function(err) {
+                        showToast('❌ Erro ao ativar: ' + escHtml(err.message || ''), true);
+                    });
             })
             .catch(function(err) {
                 removePanel();
-                showToast('❌ Erro: ' + err.message, true);
+                showToast('❌ Erro ao baixar: ' + escHtml(err.message || ''), true);
             });
     }
     function escHtml(str) {
@@ -280,6 +302,7 @@
                 });
         });
         ref.parentNode.insertBefore(btn, ref);
+        console.log('[Legendaz] Botão injetado.');
     }
     document.addEventListener('play', function(e) {
         if (!e.target || e.target.tagName !== 'VIDEO') return;
@@ -301,4 +324,5 @@
             removePanel();
         }
     });
+    console.log('[Legendaz] Script carregado.');
 }());
