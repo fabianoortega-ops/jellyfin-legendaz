@@ -3,9 +3,12 @@
 
     var BTN_ID   = 'lgz-search-btn';
     var PANEL_ID = 'lgz-panel';
-    var _itemId     = null;
-    var _lang       = null;
-    var _searchLang = null;
+    var _itemId      = null;
+    var _lang        = null;
+    var _searchLang  = null;
+    var _lastResults = null;
+    var _lastResultsItemId = null;
+    var _lastResultsLang   = null;
 
     function getToken() {
         try {
@@ -123,6 +126,11 @@
             _searchLang = sl;
             doSearch(itemId, sl);
         });
+        if (_lastResults && _lastResultsItemId === itemId) {
+            var langInput = document.getElementById('lgz-lang');
+            if (langInput && _lastResultsLang) langInput.value = _lastResultsLang;
+            renderResults(itemId, _lastResults);
+        }
     }
 
     function renderResults(itemId, results) {
@@ -154,7 +162,12 @@
         var c = document.getElementById('lgz-results');
         if (c) c.innerHTML = '<p style="color:#888;font-size:.85rem;text-align:center;padding:20px">⏳ Searching… (may take a few minutes)</p>';
         api('GET', 'Items/' + itemId + '/RemoteSearch/Subtitles/' + encodeURIComponent(lang))
-            .then(function(r) { renderResults(itemId, r); })
+            .then(function(r) {
+                _lastResults = r;
+                _lastResultsItemId = itemId;
+                _lastResultsLang = lang;
+                renderResults(itemId, r);
+            })
             .catch(function(e) {
                 var c2 = document.getElementById('lgz-results');
                 if (c2) c2.innerHTML = '<p style="color:#f66;font-size:.85rem;text-align:center;padding:20px">Error: ' + escHtml(e.message) + '</p>';
