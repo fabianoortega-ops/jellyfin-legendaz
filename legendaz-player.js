@@ -178,70 +178,96 @@
         return (LANG_ALIASES[a] || []).indexOf(b) !== -1;
     }
 
-    function activateSubtitle(itemId, beforeIndices) {
-        console.log('[Legendaz] activateSubtitle start, beforeIndices:', beforeIndices);
+    function activateSubtitle(itemId, beforeButtons) {
+        console.log('[Legendaz] activateSubtitle, beforeButtons:', beforeButtons);
 
-        function getNewSub(attemptsLeft) {
-            return api('GET', 'Items/' + itemId + '?fields=MediaStreams')
-                .then(function(item) {
-                    var subs = (item.MediaStreams || []).filter(function(s) { return s.Type === 'Subtitle'; });
-                    console.log('[Legendaz] Poll (' + (11 - attemptsLeft) + '/10):', subs.map(function(s) {
-                        return s.Index + '/' + s.Language + '/ext=' + s.IsExternal;
-                    }));
-                    var found = subs.find(function(s) { return beforeIndices.indexOf(s.Index) === -1; });
-                    if (found) { return { sub: found, all: subs }; }
-                    if (attemptsLeft <= 1) { return { sub: null, all: subs }; }
-                    return new Promise(function(r) { setTimeout(r, 1500); })
-                        .then(function() { return getNewSub(attemptsLeft - 1); });
-                });
+        var SUBTITLE_TITLES = ['legendas','subtitles','sous-titres','untertitel','subtítulos','sottotitoli','ondertitels','субтитры'];
+        var EXTERNAL_KW = ['externo','external','externe','extern','esterno'];
+
+        function findSubtitleSheet() {
+            var sheets = document.querySelectorAll('.actionSheetContent');
+            for (var i = 0; i < sheets.length; i++) {
+                var t = sheets[i].querySelector('.actionSheetTitle');
+                if (t && SUBTITLE_TITLES.indexOf(t.textContent.trim().toLowerCase()) !== -1) return sheets[i];
+            }
+            return null;
         }
 
-        return new Promise(function(r) { setTimeout(r, 2000); })
-            .then(function() { return getNewSub(10); })
-            .then(function(result) {
-                var newSub = result.sub;
-                var allSubs = result.all;
+        function getButtons(sheet) {
+            return Array.from(sheet.querySelectorAll('.actionSheetScroller button'));
+        }
 
-                if (!newSub) {
-                    console.log('[Legendaz] Nenhum índice novo após polling — fallback para externa existente');
-                    var lang = (_searchLang || '').toLowerCase();
-                    newSub = allSubs.filter(function(s) {
-                        return s.IsExternal && langsMatch(lang, (s.Language || '').toLowerCase());
-                    }).pop() || allSubs.filter(function(s) { return s.IsExternal; }).pop();
-                    if (!newSub) {
-                        console.log('[Legendaz] Sem legenda externa disponível');
-                        return false;
-                    }
-                    console.log('[Legendaz] Fallback: idx=' + newSub.Index + ' lang=' + newSub.Language);
-                } else {
-                    console.log('[Legendaz] Nova legenda: idx=' + newSub.Index + ' lang=' + newSub.Language);
-                }
+        function wait(ms) { return new Promise(function(r) { setTimeout(r, ms); }); }
 
-                var pm = window.playbackManager;
-                var player = pm && pm._currentPlayer;
-                console.log('[Legendaz] pm:', !!pm, 'player:', !!player);
+        var ccBtn = document.querySelector('.btnSubtitles');
+        if (!ccBtn) { return Promise.resolve(false); }
 
-                if (!pm || !player) { return false; }
+        return wait(1000)
+            .then(function() {
+                ccBtn.click();
+                return wait(800);
+            })
+            .then(function() {
+                var sheet = findSubtitleSheet();
+                if (!sheet) { return false; }
+                var buttons = getButtons(sheet);
+                console.log('[Legendaz] CC aberto (1a vez):', buttons.map(function(b){return b.textContent.trim();}));
 
-                var embeddedSub = allSubs.find(function(s) {
-                    return !s.IsExternal && beforeIndices.indexOf(s.Index) !== -1;
+                var trigger = buttons.find(function(b) {
+                    var txt = b.textContent.toLowerCase();
+                    return !txt.includes('desligado') && !txt.includes(' off') && txt.trim().length > 0;
                 });
-                console.log('[Legendaz] Embedded para trigger:', embeddedSub ? embeddedSub.Index : 'nenhuma');
 
-                if (embeddedSub) {
-                    console.log('[Legendaz] setSubtitleStreamIndex(' + embeddedSub.Index + ', player)');
-                    pm.setSubtitleStreamIndex(embeddedSub.Index, player);
-                    return new Promise(function(resolve) { setTimeout(resolve, 4000); })
-                        .then(function() {
-                            console.log('[Legendaz] Ativando nova: idx=' + newSub.Index);
-                            pm.setSubtitleStreamIndex(newSub.Index, player);
-                            return true;
-                        });
+                if (!trigger) {
+                    console.log('[Legendaz] Nenhuma legenda existente para clicar');
+                    var bd = document.querySelector('.dialogBackdrop');
+                    if (bd) bd.click();
+                    return false;
                 }
 
-                console.log('[Legendaz] Sem embedded — ativando direto: idx=' + newSub.Index);
-                pm.setSubtitleStreamIndex(newSub.Index, player);
-                return true;
+                console.log('[Legendaz] Clicando em existente para forçar reload:', trigger.textContent.trim());
+                trigger.click();
+                return wait(5000);
+            })
+            .then(function(v) {
+                if (v === false) return false;
+                ccBtn.click();
+                return wait(800);
+            })
+            .then(function(v) {
+                if (v === false) return false;
+                var sheet = findSubtitleSheet();
+                if (!sheet) return false;
+                var buttons = getButtons(sheet);
+                console.log('[Legendaz] CC aberto (2a vez):', buttons.map(function(b){return b.textContent.trim();}));
+
+                var lang = (_searchLang || '').toLowerCase();
+
+                var newBtn = buttons.find(function(b) {
+                    return beforeButtons.indexOf(b.textContent.trim()) === -1 &&
+                           !b.textContent.toLowerCase().includes('desligado');
+                });
+
+                if (!newBtn) {
+                    newBtn = buttons.find(function(b) {
+                        var txt = b.textContent.toLowerCase();
+                        return EXTERNAL_KW.some(function(k) { return txt.includes(k); }) &&
+                               (lang ? txt.includes(lang) || txt.includes('portugu') || txt.includes('pt-br') : true);
+                    }) || buttons.find(function(b) {
+                        return EXTERNAL_KW.some(function(k) { return b.textContent.toLowerCase().includes(k); });
+                    });
+                }
+
+                if (newBtn) {
+                    console.log('[Legendaz] Clicando em nova legenda:', newBtn.textContent.trim());
+                    newBtn.click();
+                    return true;
+                }
+
+                var bd = document.querySelector('.dialogBackdrop');
+                if (bd) bd.click();
+                console.log('[Legendaz] Nova legenda não encontrada no menu');
+                return false;
             })
             .catch(function(e) {
                 console.log('[Legendaz] activateSubtitle erro:', e);
@@ -253,13 +279,24 @@
         var c = document.getElementById('lgz-results');
         if (c) c.innerHTML = '<p style="color:#888;font-size:.85rem;text-align:center;padding:20px">⬇️ Downloading subtitle…</p>';
 
-        var beforeIndices = [];
+        var beforeButtons = [];
+        var ccBtn = document.querySelector('.btnSubtitles');
+        if (ccBtn) {
+            ccBtn.click();
+            setTimeout(function() {
+                var sheet = findSubtitleSheet();
+                if (sheet) {
+                    beforeButtons = Array.from(sheet.querySelectorAll('.actionSheetScroller button'))
+                        .map(function(b) { return b.textContent.trim(); });
+                    console.log('[Legendaz] Botões antes do download:', beforeButtons);
+                }
+                var bd = document.querySelector('.dialogBackdrop');
+                if (bd) bd.click();
+            }, 600);
+        }
         api('GET', 'Items/' + itemId + '?fields=MediaStreams')
             .then(function(item) {
-                beforeIndices = (item.MediaStreams || [])
-                    .filter(function(s) { return s.Type === 'Subtitle'; })
-                    .map(function(s) { return s.Index; });
-                console.log('[Legendaz] Índices antes do download:', beforeIndices);
+                console.log('[Legendaz] Índices antes:', (item.MediaStreams||[]).filter(function(s){return s.Type==='Subtitle';}).map(function(s){return s.Index;}));
                 return api('POST', 'Items/' + itemId + '/RemoteSearch/Subtitles/' + encodeURIComponent(sub.Id));
             })
             .then(function() {
@@ -268,7 +305,7 @@
             .then(function() {
                 removePanel();
                 showToast('✅ ' + escHtml(sub.Name || 'Legenda') + ' downloaded!');
-                activateSubtitle(itemId, beforeIndices)
+                activateSubtitle(itemId, beforeButtons)
                     .then(function(ok) {
                         if (ok) {
                             showToast('▶ Subtitle activated!');
@@ -288,6 +325,16 @@
 
     function escHtml(s) {
         return String(s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+    }
+
+    var SUBTITLE_TITLES_GLOBAL = ['legendas','subtitles','sous-titres','untertitel','subtítulos','sottotitoli','ondertitels','субтитры'];
+    function findSubtitleSheet() {
+        var sheets = document.querySelectorAll('.actionSheetContent');
+        for (var i = 0; i < sheets.length; i++) {
+            var t = sheets[i].querySelector('.actionSheetTitle');
+            if (t && SUBTITLE_TITLES_GLOBAL.indexOf(t.textContent.trim().toLowerCase()) !== -1) return sheets[i];
+        }
+        return null;
     }
 
     function injectButton() {
