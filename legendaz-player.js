@@ -261,6 +261,10 @@
                 if (newBtn) {
                     console.log('[Legendaz] Clicando em nova legenda:', newBtn.textContent.trim());
                     newBtn.click();
+                    setTimeout(function() {
+                        var bd = document.querySelector('.dialogBackdrop');
+                        if (bd) bd.click();
+                    }, 300);
                     return true;
                 }
 
